@@ -624,8 +624,15 @@ export function SchematicRenderer({ netlist }: Props) {
     const blob = new Blob([str], { type: "image/svg+xml" });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement("a");
-    a.href = url; a.download = "schematic.svg"; a.click();
-    URL.revokeObjectURL(url);
+    a.href = url;
+    a.download = "schematic.svg";
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 1000);
   }, [maxX, maxY]);
 
   // ── Build wire / power / junction data ────────────────────────────────────

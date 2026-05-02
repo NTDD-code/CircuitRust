@@ -108,8 +108,13 @@ export default function Home() {
           const a = document.createElement("a");
           a.href = url;
           a.download = result.filename;
+          a.style.display = "none";
+          document.body.appendChild(a);
           a.click();
-          URL.revokeObjectURL(url);
+          setTimeout(() => {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+          }, 1000);
         },
       }
     );
