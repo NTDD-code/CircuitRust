@@ -64,6 +64,7 @@ export const CompileCircuitResponse = zod.object({
             "sensor",
             "module",
             "power",
+            "actuator",
           ]),
           voltageLevel: zod.number().optional(),
           pins: zod.array(
@@ -109,7 +110,7 @@ export const CompileCircuitResponse = zod.object({
       nets: zod.array(
         zod.object({
           name: zod.string(),
-          type: zod.enum(["power", "ground", "signal"]),
+          type: zod.enum(["power", "ground", "signal", "nc"]),
           voltage: zod.number().optional(),
         }),
       ),
@@ -145,6 +146,7 @@ export const GetComponentLibraryResponse = zod.object({
         "sensor",
         "module",
         "power",
+        "actuator",
       ]),
       description: zod.string(),
       aliases: zod.array(zod.string()).optional(),

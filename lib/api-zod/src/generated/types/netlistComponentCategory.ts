@@ -16,4 +16,5 @@ export const NetlistComponentCategory = {
   sensor: "sensor",
   module: "module",
   power: "power",
+  actuator: "actuator",
 } as const;

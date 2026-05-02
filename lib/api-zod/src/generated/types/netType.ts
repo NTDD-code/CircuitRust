@@ -12,4 +12,5 @@ export const NetType = {
   power: "power",
   ground: "ground",
   signal: "signal",
+  nc: "nc",
 } as const;

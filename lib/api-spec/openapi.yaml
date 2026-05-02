@@ -304,7 +304,7 @@ components:
           type: string
         category:
           type: string
-          enum: [passive, active_discrete, active_ic, sensor, module, power]
+          enum: [passive, active_discrete, active_ic, sensor, module, power, actuator]
         voltageLevel:
           type: number
         pins:
@@ -376,7 +376,7 @@ components:
           type: string
         type:
           type: string
-          enum: [power, ground, signal]
+          enum: [power, ground, signal, nc]
         voltage:
           type: number
       required:
@@ -424,7 +424,7 @@ components:
           type: string
         category:
           type: string
-          enum: [passive, active_discrete, active_ic, sensor, module, power]
+          enum: [passive, active_discrete, active_ic, sensor, module, power, actuator]
         description:
           type: string
         aliases:
