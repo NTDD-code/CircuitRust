@@ -1,4 +1,4 @@
-export type PinType = "power" | "ground" | "signal" | "analog" | "digital" | "bidirectional";
+export type PinType = "power" | "ground" | "signal" | "analog" | "digital" | "bidirectional" | "passive";
 export type NetType = "power" | "ground" | "signal";
 export type PinDirection = "in" | "out" | "passive" | "power" | "ground" | "open_collector" | "bidirectional";
 export type ComponentCategory = "passive" | "active_discrete" | "active_ic" | "sensor" | "module" | "power";
@@ -10,6 +10,7 @@ export interface ComponentPinDef {
   maxVoltage?: number;
   driveVoltage?: number;
   pinNumber: number;
+  required?: boolean;
 }
 
 export interface ComponentDef {
@@ -27,6 +28,7 @@ export interface ParsedPin {
   maxVoltage?: number;
   driveVoltage?: number;
   pinNumber: number;
+  required?: boolean;
   net?: string;
 }
 
@@ -77,8 +79,8 @@ export const COMPONENT_DEFS: Record<string, ComponentDef> = {
     category: "passive",
     description: "Two-terminal passive resistor",
     pins: [
-      { name: "pin1", type: "analog", direction: "passive", pinNumber: 1 },
-      { name: "pin2", type: "analog", direction: "passive", pinNumber: 2 },
+      { name: "pin1", type: "passive", direction: "passive", pinNumber: 1 },
+      { name: "pin2", type: "passive", direction: "passive", pinNumber: 2 },
     ],
   },
   Capacitor: {
@@ -371,8 +373,8 @@ export const COMPONENT_DEFS: Record<string, ComponentDef> = {
       { name: "gnd",  type: "ground",  direction: "ground",                   pinNumber: 2 },
       { name: "scl",  type: "digital", direction: "in",      maxVoltage: 3.6, driveVoltage: 3.3, pinNumber: 3 },
       { name: "sda",  type: "digital", direction: "bidirectional", maxVoltage: 3.6, driveVoltage: 3.3, pinNumber: 4 },
-      { name: "int",  type: "digital", direction: "out",     driveVoltage: 3.3, pinNumber: 5 },
-      { name: "ad0",  type: "digital", direction: "in",      maxVoltage: 3.6, pinNumber: 6 },
+      { name: "int",  type: "digital", direction: "out",     driveVoltage: 3.3, pinNumber: 5, required: false },
+      { name: "ad0",  type: "digital", direction: "in",      maxVoltage: 3.6, pinNumber: 6, required: true },
     ],
   },
   Ultrasonic: {
@@ -498,7 +500,7 @@ export const COMPONENT_DEFS: Record<string, ComponentDef> = {
     voltageLevel: 3.3,
     pins: [
       { name: "vcc",    type: "power",   direction: "power",  maxVoltage: 3.6, pinNumber: 1 },
-      { name: "v5",     type: "power",   direction: "power",  maxVoltage: 5.5, pinNumber: 2 },
+      { name: "v5",     type: "power",   direction: "power",  maxVoltage: 5.5, pinNumber: 2, required: false },
       { name: "gnd",    type: "ground",  direction: "ground",                  pinNumber: 3 },
       { name: "gpio0",  type: "digital", direction: "bidirectional", maxVoltage: 3.6, driveVoltage: 3.3, pinNumber: 4 },
       { name: "gpio2",  type: "digital", direction: "bidirectional", maxVoltage: 3.6, driveVoltage: 3.3, pinNumber: 5 },

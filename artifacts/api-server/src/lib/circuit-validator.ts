@@ -20,13 +20,17 @@ export interface ValidationWarning {
 }
 
 const COMPATIBLE_PAIRS: Record<PinType, PinType[]> = {
-  power:        ["analog", "signal", "digital", "bidirectional"],
-  ground:       ["analog", "signal", "digital", "bidirectional"],
-  signal:       ["power", "ground", "analog", "signal", "digital", "bidirectional"],
-  analog:       ["power", "ground", "analog", "signal", "bidirectional"],
-  digital:      ["power", "ground", "digital", "signal", "bidirectional"],
-  bidirectional:["power", "ground", "analog", "signal", "digital", "bidirectional"],
+  power:        ["analog", "signal", "digital", "bidirectional", "passive"],
+  ground:       ["analog", "signal", "digital", "bidirectional", "passive"],
+  signal:       ["power", "ground", "analog", "signal", "digital", "bidirectional", "passive"],
+  analog:       ["power", "ground", "analog", "signal", "bidirectional", "passive"],
+  digital:      ["power", "ground", "digital", "signal", "bidirectional", "passive"],
+  bidirectional:["power", "ground", "analog", "signal", "digital", "bidirectional", "passive"],
+  passive:      ["power", "ground", "analog", "signal", "digital", "bidirectional", "passive"],
 };
+
+// Address-select pins that MUST be tied to VCC or GND (E014)
+const ADDRESS_SELECT_PINS = new Set(["ad0", "a0", "a1", "a2"]);
 
 function isSignalPin(pin: ParsedPin): boolean {
   return pin.type === "digital" || pin.type === "signal" || pin.type === "analog";
@@ -149,14 +153,18 @@ export function validateCircuit(
         continue;
       }
 
-      const compatible = COMPATIBLE_PAIRS[fromPin.type] ?? [];
-      if (!compatible.includes(toPin.type)) {
-        errors.push({
-          line: conn.line, column: 1,
-          message: `Incompatible pins: ${conn.from}.${conn.fromPin} (${fromPin.type}) cannot connect to ${conn.to}.${conn.toPin} (${toPin.type})`,
-          errorCode: "E006", severity: "error", sourceLine: srcLine,
-        });
-        continue;
+      // Passive/bidirectional pins are universal — skip the compatibility check
+      if (fromPin.type !== "passive" && fromPin.type !== "bidirectional" &&
+          toPin.type  !== "passive" && toPin.type  !== "bidirectional") {
+        const compatible = COMPATIBLE_PAIRS[fromPin.type] ?? [];
+        if (!compatible.includes(toPin.type)) {
+          errors.push({
+            line: conn.line, column: 1,
+            message: `Incompatible pins: ${conn.from}.${conn.fromPin} (${fromPin.type}) cannot connect to ${conn.to}.${conn.toPin} (${toPin.type})`,
+            errorCode: "E006", severity: "error", sourceLine: srcLine,
+          });
+          continue;
+        }
       }
 
       // W001: direct power-to-power
@@ -278,8 +286,12 @@ export function validateCircuit(
       if (conn.from === name) connectedPins.add(conn.fromPin);
       if (conn.to   === name) connectedPins.add(conn.toPin);
     }
-    const requiredPins = comp.pins.filter((p) => p.type === "power" || p.type === "ground");
-    const unconnectedRequired = requiredPins.filter((p) => !connectedPins.has(p.name));
+    // W004: unconnected required power/ground pins
+    // Only pins with required !== false count — optional pins (e.g. ESP32.v5) are exempt
+    const requiredPowerPins = comp.pins.filter(
+      (p) => (p.type === "power" || p.type === "ground") && p.required !== false,
+    );
+    const unconnectedRequired = requiredPowerPins.filter((p) => !connectedPins.has(p.name));
     if (unconnectedRequired.length > 0) {
       warnings.push({
         line: comp.line, column: 1,
@@ -288,13 +300,30 @@ export function validateCircuit(
       });
     }
 
+    // W005 / E014: floating signal/data pins
     const unconnectedPins = comp.pins.filter((p) => !connectedPins.has(p.name));
     if (unconnectedPins.length > 0 && unconnectedPins.length < comp.pins.length && unconnectedRequired.length === 0) {
-      warnings.push({
-        line: comp.line, column: 1,
-        message: `Component '${name}' (${comp.type}) has floating pins: ${unconnectedPins.map((p) => p.name).join(", ")}`,
-        warningCode: "W005",
-      });
+      // E014: address-select pins that are floating → hard error
+      const floatingAddrPins = unconnectedPins.filter((p) => ADDRESS_SELECT_PINS.has(p.name));
+      for (const pin of floatingAddrPins) {
+        errors.push({
+          line: comp.line, column: 1,
+          message: `error[E014]: ${name}.${pin.name} must be tied to VCC or GND to set the I2C address. Floating ${pin.name} causes undefined device address.`,
+          errorCode: "E014", severity: "error", sourceLine: "",
+        });
+      }
+
+      // W005: remaining floating pins that are not optional and not address-select
+      const floatingOther = unconnectedPins.filter(
+        (p) => !ADDRESS_SELECT_PINS.has(p.name) && p.required !== false,
+      );
+      if (floatingOther.length > 0) {
+        warnings.push({
+          line: comp.line, column: 1,
+          message: `Component '${name}' (${comp.type}) has floating pins: ${floatingOther.map((p) => p.name).join(", ")}`,
+          warningCode: "W005",
+        });
+      }
     }
   }
 
