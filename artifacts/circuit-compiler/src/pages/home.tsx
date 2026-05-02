@@ -38,7 +38,7 @@ import { CircuitEditor } from "@/components/circuit-editor";
 import { LibraryPanel } from "@/components/library-panel";
 import { AiAssistantPanel } from "@/components/ai-assistant-panel";
 import { AiSettingsDrawer } from "@/components/ai-settings-drawer";
-import { NetlistGraph } from "@/components/netlist-graph";
+import { SchematicRenderer } from "@/components/schematic-renderer";
 import { BomPanel } from "@/components/bom-panel";
 import { loadAiSettings, saveAiSettings, getProviderLabel, isProviderConfigured, type AiProviderSettings } from "@/lib/ai-provider";
 
@@ -342,7 +342,7 @@ export default function Home() {
                 [
                   { id: "output", icon: Activity, label: "COMPILER OUTPUT" },
                   { id: "bom", icon: BarChart2, label: "BOM", disabled: !compileResult?.success },
-                  { id: "visualizer", icon: Network, label: "VISUALIZER", disabled: !compileResult?.netlist },
+                  { id: "visualizer", icon: Network, label: "SCHEMATIC", disabled: !compileResult?.netlist },
                 ] satisfies OutputTabDef[]
               ).map(({ id, icon: Icon, label, disabled }) => (
                 <button
@@ -471,7 +471,7 @@ export default function Home() {
               )}
 
               {outputTab === "visualizer" && compileResult?.netlist && (
-                <NetlistGraph netlist={compileResult.netlist} />
+                <SchematicRenderer netlist={compileResult.netlist} />
               )}
             </div>
           </div>

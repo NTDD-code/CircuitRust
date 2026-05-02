@@ -84,10 +84,35 @@ A professional-grade developer tool for defining, validating, and exporting elec
 - `artifacts/circuit-compiler/src/components/library-panel.tsx` — searchable component sidebar
 - `artifacts/circuit-compiler/src/components/ai-settings-drawer.tsx` — AI provider settings sheet
 - `artifacts/circuit-compiler/src/components/ai-assistant-panel.tsx` — Generate + Safety tabs
-- `artifacts/circuit-compiler/src/components/netlist-graph.tsx` — SVG circuit visualizer
+- `artifacts/circuit-compiler/src/components/schematic-renderer.tsx` — IEEE EE schematic renderer (pan/zoom, IEEE SVG symbols, orthogonal wires, VCC/GND power rails, click-to-inspect)
+- `artifacts/circuit-compiler/src/components/netlist-graph.tsx` — SVG circuit visualizer (legacy, kept for reference)
 - `artifacts/circuit-compiler/src/components/bom-panel.tsx` — BOM table + CSV/JSON export
 - `artifacts/circuit-compiler/src/lib/bom.ts` — BOM generation + CSV serialization
-- `artifacts/circuit-compiler/src/lib/ai-provider.ts` — AI provider settings, system prompts, localStorage
+- `artifacts/circuit-compiler/src/lib/ai-provider.ts` — AI provider settings, strict system prompts (E007/E008 hallucination prevention), localStorage
+
+**Key backend additions (Phase 6):**
+- `artifacts/api-server/src/lib/circuit-registry.ts` — authoritative component/model registry (all supported models, pins, packages)
+
+**Error codes (updated):**
+- E001: Short circuit (VCC directly to GND)
+- E002: Unknown component type
+- E003: Invalid connect!/syntax
+- E004: Undefined variable
+- E005: Unknown pin name
+- E006: Incompatible pin types
+- E007: LED connected to power without series current-limiting resistor ← NEW
+- E008: High-current load (Buzzer/Motor) driven directly from MCU GPIO ← NEW
+
+**Strict DSL (Phase 6 additions):**
+- `circuit Name { ... }` wrapper block supported (lines skipped cleanly by parser)
+- `Net::VCC`, `Net::GND`, `Net::Signal` net declarations
+- `->` operator in `connect!()` (in addition to legacy `=>`)
+- AI system prompts enforce all E/W rules with explicit component/model/pin lists
+
+**AI pre-insert validation:**
+- `handleGenerate` in ai-assistant-panel compiles AI output before inserting
+- If compile fails: errors shown inline, code NOT inserted into editor
+- If compile endpoint unreachable: code inserted anyway (fail-open)
 
 **OpenAPI spec:** `lib/api-spec/openapi.yaml` (v0.3.0) — source of truth for all API types and hooks
 - After updating the spec: `pnpm --filter @workspace/api-spec run codegen` → then `pnpm run typecheck:libs`

@@ -609,6 +609,7 @@ function stripComments(line: string): string {
 }
 
 function parseNetDeclaration(line: string, lineNum: number, errors: ParseError[], nets: Map<string, ParsedNet>): boolean {
+  // Original syntax: Net::power(5.0), Net::ground(), Net::signal()
   const netPowerMatch = line.match(/^let\s+(\w+)\s*=\s*Net::power\(([0-9.]+)\)\s*;?$/);
   if (netPowerMatch) {
     nets.set(netPowerMatch[1], { name: netPowerMatch[1], type: "power", voltage: parseFloat(netPowerMatch[2]) });
@@ -622,6 +623,34 @@ function parseNetDeclaration(line: string, lineNum: number, errors: ParseError[]
   const netSignalMatch = line.match(/^let\s+(\w+)\s*=\s*Net::signal\(\)\s*;?$/);
   if (netSignalMatch) {
     nets.set(netSignalMatch[1], { name: netSignalMatch[1], type: "signal" });
+    return true;
+  }
+
+  // Strict syntax: Net::VCC { voltage: 5.0 }, Net::GND, Net::Signal { ... }
+  const vccBraceMatch = line.match(/^let\s+(\w+)\s*=\s*Net::VCC\s*\{([^}]*)\}\s*;?$/i);
+  if (vccBraceMatch) {
+    const voltMatch = vccBraceMatch[2].match(/voltage\s*:\s*([0-9.]+)/);
+    nets.set(vccBraceMatch[1], { name: vccBraceMatch[1], type: "power", voltage: voltMatch ? parseFloat(voltMatch[1]) : 5.0 });
+    return true;
+  }
+  const vccBareMatch = line.match(/^let\s+(\w+)\s*=\s*Net::VCC\s*;?$/i);
+  if (vccBareMatch) {
+    nets.set(vccBareMatch[1], { name: vccBareMatch[1], type: "power", voltage: 5.0 });
+    return true;
+  }
+  const gndBraceMatch = line.match(/^let\s+(\w+)\s*=\s*Net::GND\s*(?:\{[^}]*\})?\s*;?$/i);
+  if (gndBraceMatch) {
+    nets.set(gndBraceMatch[1], { name: gndBraceMatch[1], type: "ground" });
+    return true;
+  }
+  const sigBraceMatch = line.match(/^let\s+(\w+)\s*=\s*Net::Signal\s*(?:\{[^}]*\})?\s*;?$/i);
+  if (sigBraceMatch) {
+    nets.set(sigBraceMatch[1], { name: sigBraceMatch[1], type: "signal" });
+    return true;
+  }
+  const pwmBraceMatch = line.match(/^let\s+(\w+)\s*=\s*Net::PWM\s*(?:\{[^}]*\})?\s*;?$/i);
+  if (pwmBraceMatch) {
+    nets.set(pwmBraceMatch[1], { name: pwmBraceMatch[1], type: "signal" });
     return true;
   }
   return false;
@@ -704,7 +733,8 @@ function parseConnectionMacro(
   errors: ParseError[],
   connections: ParsedConnection[],
 ): boolean {
-  const connectMatch = line.match(/^connect!\((.+?)\s*=>\s*(.+?)\)\s*;?$/);
+  // Support both => (original) and -> (strict DSL)
+  const connectMatch = line.match(/^connect!\((.+?)\s*(?:=>|->|→)\s*(.+?)\)\s*;?$/);
   if (!connectMatch) return false;
 
   function parseEndpoint(s: string): { varName: string; pin?: string } | null {
@@ -741,11 +771,16 @@ export function parseCircuit(source: string): ParseResult {
   const nets = new Map<string, ParsedNet>();
   const errors: ParseError[] = [];
 
-  for (let i = 0; i < source.split("\n").length; i++) {
+  const lines = source.split("\n");
+  for (let i = 0; i < lines.length; i++) {
     const lineNum = i + 1;
-    const raw = source.split("\n")[i];
+    const raw = lines[i];
     const line = stripComments(raw).trim();
     if (!line) continue;
+
+    // Strict DSL: skip 'circuit Name {' opening and closing '}'
+    if (/^circuit\s+\w+\s*\{/.test(line)) continue;
+    if (/^\}$/.test(line)) continue;
 
     if (parseNetDeclaration(line, lineNum, errors, nets)) continue;
     if (parseComponentDeclaration(line, lineNum, errors, components)) continue;

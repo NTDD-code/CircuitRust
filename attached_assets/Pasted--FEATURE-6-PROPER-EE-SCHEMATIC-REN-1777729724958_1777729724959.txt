@@ -1,0 +1,429 @@
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+## FEATURE 6 — PROPER EE SCHEMATIC RENDERER (REPLACE OLD FEATURE 6)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+DO NOT use React Flow, mind-map style, or node-graph style.
+DO NOT draw boxes with component names.
+Build a REAL electronic schematic renderer, like KiCad or LTspice.
+
+References: look at any textbook circuit diagram or KiCad schematic.
+That is the exact visual style required.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+## 6A — STANDARD SCHEMATIC SYMBOLS (SVG Paths)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Each component renders as its standard IEEE/IEC schematic symbol.
+All symbols are drawn in SVG using <path>, <line>, <circle>, <polygon>.
+All symbols are centered at origin (0,0) and scaled to a 40x40px grid unit.
+
+─── RESISTOR symbol ────────────────────────────────────────
+
+  Pin1 ───┤ /\/\/\ ├─── Pin2
+  (left)              (right)
+
+  SVG path (horizontal, 40px wide, 10px tall zigzag):
+  <g class="component resistor">
+    <line x1="-20" y1="0" x2="-10" y2="0"/>           <!-- lead left  -->
+    <polyline points="-10,0 -7,-6 -1,6 5,-6 11,6 17,-6 10,0"/>  <!-- zigzag   -->
+    <line x1="10" y1="0" x2="20" y2="0"/>             <!-- lead right -->
+  </g>
+
+  Reference designator "R1" above center.
+  Value "10kΩ" below center.
+
+─── LED symbol ─────────────────────────────────────────────
+
+  Anode ──┤▶|── Cathode
+          with 2 arrows pointing diagonally up-right
+
+  SVG:
+  <g class="component led">
+    <!-- Triangle (anode → cathode) -->
+    <polygon points="-8,-7 -8,7 8,0" fill="none" stroke="currentColor"/>
+    <!-- Bar (cathode) -->
+    <line x1="8" y1="-8" x2="8" y2="8"/>
+    <!-- Leads -->
+    <line x1="-20" y1="0" x2="-8" y2="0"/>
+    <line x1="8" y1="0" x2="20" y2="0"/>
+    <!-- Emission arrows -->
+    <line x1="4" y1="-6" x2="14" y2="-16" marker-end="url(#arr)"/>
+    <line x1="9" y1="-2" x2="19" y2="-12" marker-end="url(#arr)"/>
+  </g>
+
+  For IR LED: draw as LED symbol, add "IR" label.
+  For red LED: color the triangle fill red at 30% opacity.
+
+─── NPN TRANSISTOR (2N2222) symbol ─────────────────────────
+
+  Standard BJT NPN schematic symbol:
+               C (collector)
+               |
+        B ──┤/
+               |
+               E (emitter, with arrow pointing OUT)
+
+  SVG:
+  <g class="component transistor-npn">
+    <!-- Vertical base line -->
+    <line x1="-8" y1="-16" x2="-8" y2="16"/>
+    <!-- Base lead -->
+    <line x1="-20" y1="0" x2="-8" y2="0"/>
+    <!-- Collector line (angled up-right) -->
+    <line x1="-8" y1="-8" x2="20" y2="-20"/>
+    <!-- Emitter line (angled down-right, with arrow) -->
+    <line x1="-8" y1="8" x2="20" y2="20"/>
+    <!-- Arrow on emitter tip pointing outward (NPN) -->
+    <polygon points="14,16 20,20 16,26" fill="currentColor"/>
+    <!-- Circle (device body) -->
+    <circle cx="0" cy="0" r="18" fill="none" stroke="currentColor"/>
+    <!-- Pin labels -->
+    <text x="-26" y="4" class="pin-label">B</text>
+    <text x="22" y="-22" class="pin-label">C</text>
+    <text x="22" y="26" class="pin-label">E</text>
+  </g>
+
+─── BUZZER symbol ──────────────────────────────────────────
+
+  Standard buzzer/speaker schematic:
+  + ──┤▭)── (curved lines representing sound waves)
+
+  SVG:
+  <g class="component buzzer">
+    <rect x="-6" y="-10" width="12" height="20" fill="none"/>
+    <path d="M6,-14 Q20,-14 20,0 Q20,14 6,14" fill="none"/>
+    <path d="M6,-9  Q15,-9  15,0 Q15,9  6,9"  fill="none"/>
+    <line x1="-20" y1="-6" x2="-6" y2="-6"/>  <!-- VCC lead  -->
+    <line x1="-20" y1="6"  x2="-6" y2="6"/>   <!-- GND lead  -->
+    <text x="-24" y="-4" class="pin-label">+</text>
+    <text x="-24" y="10" class="pin-label">−</text>
+  </g>
+
+─── CAPACITOR symbol ───────────────────────────────────────
+
+  Pin1 ──┤ | ├── Pin2
+           (two vertical bars, gap between)
+
+  SVG (ceramic/non-polar):
+  <g class="component capacitor">
+    <line x1="-20" y1="0" x2="-4" y2="0"/>
+    <line x1="-4" y1="-12" x2="-4" y2="12"/>
+    <line x1="4" y1="-12" x2="4" y2="12"/>
+    <line x1="4" y1="0" x2="20" y2="0"/>
+  </g>
+
+  For electrolytic: left bar is curved (+) plate, add "+" label.
+
+─── VCC POWER RAIL symbol ──────────────────────────────────
+
+  Standard "arrow pointing UP" power symbol:
+
+    ───▲
+       |
+      VCC
+
+  SVG:
+  <g class="net-vcc">
+    <line x1="0" y1="0" x2="0" y2="-16"/>
+    <polygon points="-10,-16 10,-16 0,-28" fill="var(--accent)"/>
+    <text x="0" y="-32" text-anchor="middle" class="net-label">VCC</text>
+    <text x="4" y="-32" class="net-label voltage">5V</text>
+  </g>
+
+─── GND SYMBOL ─────────────────────────────────────────────
+
+  Standard "downward triangle" or "three horizontal bars":
+
+     |
+    ───  (3 horizontal lines, each shorter)
+    ──
+    ─
+
+  SVG:
+  <g class="net-gnd">
+    <line x1="0" y1="0" x2="0" y2="10"/>
+    <line x1="-14" y1="10" x2="14" y2="10"/>
+    <line x1="-9"  y1="16" x2="9"  y2="16"/>
+    <line x1="-4"  y1="22" x2="4"  y2="22"/>
+    <text x="0" y="34" text-anchor="middle" class="net-label">GND</text>
+  </g>
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+## 6B — ORTHOGONAL WIRE ROUTING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+All wires are HORIZONTAL or VERTICAL only. No diagonal lines.
+This is the #1 rule of schematic layout. Diagonal wires do not exist.
+
+Wire routing algorithm:
+
+  function routeWire(pinA: Point, pinB: Point): SVGPath {
+    // Route using L-shaped Manhattan path
+    // If pins are aligned horizontally: straight line
+    if (pinA.y === pinB.y) {
+      return `M${pinA.x},${pinA.y} H${pinB.x}`;
+    }
+    // If pins are aligned vertically: straight line
+    if (pinA.x === pinB.x) {
+      return `M${pinA.x},${pinA.y} V${pinB.y}`;
+    }
+    // Otherwise: L-shaped route (horizontal then vertical)
+    // Route via midpoint: go horizontal first, then vertical
+    const midX = pinA.x + (pinB.x - pinA.x) / 2;
+    return `M${pinA.x},${pinA.y} H${midX} V${pinB.y} H${pinB.x}`;
+    // Alternative: go horizontal full width, then vertical
+    // return `M${pinA.x},${pinA.y} H${pinB.x} V${pinB.y}`;
+    // Choose whichever path avoids crossing other components
+  }
+
+Wire visual style:
+  stroke: var(--wire-color, #3fb950)
+  stroke-width: 1.5px
+  fill: none
+  stroke-linecap: square   ← IMPORTANT: square caps for clean corners
+
+Wire color by net type:
+  VCC net    → red    (#ff6b6b)
+  GND net    → black  (#888, dark mode: #aaa)
+  Signal net → green  (#3fb950)
+  PWM net    → purple (#b48ede)
+  Analog net → blue   (#58a6ff)
+
+Junction dots (T or X intersections):
+  When 3 or more wires meet at a point:
+  → Draw a solid filled circle, radius 3px, same color as wire
+  <circle cx="X" cy="Y" r="3" fill="currentColor"/>
+
+  When 2 wires cross WITHOUT connecting (X but not junction):
+  → No dot. Add a small "hop" arc over the horizontal wire:
+  <path d="M X-4,Y A4,4 0 0 1 X+4,Y" fill="none" stroke="green"/>
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+## 6C — AUTO-PLACEMENT ALGORITHM (Grid-Based)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Use a 40px grid. Every component snaps to grid intersections.
+
+Placement strategy:
+  1. VCC rail drawn across top of canvas (y=40)
+  2. GND rail drawn across bottom of canvas (y=canvas_height-40)
+  3. Components placed in rows between VCC and GND:
+       Row 1 (y=120): Components directly connected to VCC
+       Row 2 (y=240): Mid-circuit components (transistors, etc.)
+       Row 3 (y=360): Components before GND
+  4. Within each row, space components 120px apart (x=80, 200, 320, ...)
+  5. Power symbols (VCC ▲, GND ▽) placed above/below each component
+     that connects to power — instead of long wires running to a rail
+
+Example layout for IR sensor circuit:
+
+  VCC ▲    VCC ▲    VCC ▲
+   |         |         |
+  R1        R3        BZ1
+  (10k)     (1k)     (buzzer)
+   |         |         |
+  D_IR      D_IND    Q1.collector
+  (IR LED)  (red LED) |
+   |         |        Q1 (2N2222)
+  GND ▽    GND ▽     |
+                    R2.pin2
+                    (1k)
+                      |
+                    sig ──── [Signal net label]
+                      |
+                    R2.pin1
+                      |
+                    Q1.base
+                      |
+                    Q1.emitter
+                      |
+                    GND ▽
+
+Each VCC and GND is a local power symbol, not a long wire.
+This keeps the schematic compact and readable.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+## 6D — NET LABELS & ANNOTATIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Net labels: when a signal goes off-screen or connects
+to multiple places, add a named net label:
+
+  ──── trigger ────►
+
+  SVG:
+  <g class="net-label-tag">
+    <line x1="X" y1="Y" x2="X+30" y2="Y"/>
+    <polygon points="X+30,Y-8 X+30,Y+8 X+48,Y" fill="none" stroke="green"/>
+    <text x="X+4" y="Y+4" class="net-name">trigger</text>
+  </g>
+
+Reference designators: placed ABOVE each component symbol
+  font: 11px monospace, fill: var(--color-text-primary)
+  Format: "Q1" (type + number)
+
+Values: placed BELOW each component symbol
+  font: 10px monospace, fill: var(--color-text-secondary)
+  Format: "2N2222" or "10kΩ" or "100nF"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+## 6E — COMPONENT ROTATION SUPPORT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Every component symbol supports 4 orientations:
+  0°   → horizontal (default: pin1 left, pin2 right)
+  90°  → vertical (pin1 top, pin2 bottom)
+  180° → horizontal flipped
+  270° → vertical flipped
+
+Apply rotation with SVG transform:
+  <g transform="translate(X,Y) rotate(90)">
+    [component symbol at origin]
+  </g>
+
+When using rotate():
+  - Reference designator rotates WITH the component
+  - Value label rotates WITH the component
+  - Adjust label offsets to keep them outside the symbol
+
+Rotation decision logic:
+  - Resistors in vertical chains → 90°
+  - Transistors → 0° (base on left, C on top-right, E on bottom-right)
+  - LEDs → 90° if in vertical chain (anode on top)
+  - Buzzers → 0° (VCC on left, GND leads)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+## 6F — SCHEMATIC CANVAS IMPLEMENTATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Create file: src/components/SchematicRenderer.tsx
+
+Use a <svg> element with viewBox auto-calculated from component count.
+Width: 120px × number_of_columns + 160px margin
+Height: 120px × number_of_rows + 160px margin
+
+Features:
+  - Zoom in/out (mouse wheel or +/- buttons)
+  - Pan (click and drag)
+  - Click on component → highlight + show details panel on right
+  - Hover over wire → show net name tooltip
+  - "Fit to screen" button (auto-zoom to show all components)
+  - Grid toggle button (show/hide 40px grid dots in background)
+  - Export button: "Download as SVG" (downloads the raw SVG file)
+
+Dark mode support:
+  - Background: #0d1117 (dark) / #ffffff (light)
+  - Component symbols: #c9d1d9 (dark) / #24292f (light)
+  - VCC wires: #ff7b7b (dark) / #d73a49 (light)
+  - GND wires: #8b949e (dark) / #6e7681 (light)
+  - Signal wires: #3fb950 (dark) / #2ea043 (light)
+  - Grid dots: #21262d (dark) / #f6f8fa (light)
+  - Text labels: #e6edf3 (dark) / #24292f (light)
+
+Style variables (CSS):
+  --wire-vcc: #ff7b7b;
+  --wire-gnd: #8b949e;
+  --wire-sig: #3fb950;
+  --wire-pwm: #b48ede;
+  --sym-stroke: #c9d1d9;
+  --sym-fill: none;
+  --label-primary: #e6edf3;
+  --label-secondary: #8b949e;
+
+Schematic component pseudo-code:
+
+  function renderComponent(comp: ComponentDeclaration, pos: Point) {
+    const symbol = getSymbol(comp.type, comp.model); // returns SVG paths
+    const rotated = comp.rotation || 0;
+    return `
+      <g 
+        id="comp-${comp.id}"
+        class="schematic-component"
+        transform="translate(${pos.x},${pos.y}) rotate(${rotated})"
+        onclick="selectComponent('${comp.id}')"
+        cursor="pointer"
+      >
+        ${symbol}
+        <text 
+          x="0" y="-28"
+          text-anchor="middle"
+          class="ref-designator"
+        >${comp.id}</text>
+        <text 
+          x="0" y="32"
+          text-anchor="middle"
+          class="comp-value"
+        >${comp.properties.model || comp.properties.value || ''}</text>
+      </g>
+    `;
+  }
+
+  function renderWires(connections: Connection[], positions: Map<string,Point>) {
+    return connections.map(conn => {
+      const pinA = getPinPosition(conn.source, positions);
+      const pinB = getPinPosition(conn.destination, positions);
+      const netType = getNetType(conn);
+      const color = WIRE_COLORS[netType] || WIRE_COLORS.signal;
+      const path = routeWire(pinA, pinB);
+      return `
+        <path
+          d="${path}"
+          stroke="${color}"
+          stroke-width="1.5"
+          fill="none"
+          stroke-linecap="square"
+          class="wire wire-${netType}"
+          data-net="${conn.netId || ''}"
+        />
+      `;
+    }).join('');
+  }
+
+  function renderJunctions(junctionPoints: Point[], netType: string) {
+    return junctionPoints.map(p => `
+      <circle 
+        cx="${p.x}" cy="${p.y}" r="3"
+        fill="${WIRE_COLORS[netType]}"
+        class="junction"
+      />
+    `).join('');
+  }
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+## 6G — WHAT THE FINAL SCHEMATIC MUST LOOK LIKE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+For an IR sensor circuit (Q1=2N2222, R1=10k, D_IR=IR LED, 
+D_IND=red LED, R2=1k, R3=220Ω, BZ1=buzzer):
+
+The schematic output must look EXACTLY like this layout:
+
+  VCC(5V)  VCC(5V)  VCC(5V)
+    ▲         ▲         ▲
+    |         |         |
+   [R1]      [R3]      [BZ1]
+   10kΩ      220Ω     buzzer
+    |         |         |
+   [D_IR]  [D_IND]     |
+   IR LED   red LED    |
+    |         |     [Q1: 2N2222]─── B ← [R2: 1k] ← sig ─►
+    ▽         ▽         |
+   GND       GND        |
+                        ▽
+                       GND
+
+Rules enforced visually:
+  ✓ All wires are horizontal or vertical (no diagonals)
+  ✓ Every component is its proper IEEE symbol (not a box)
+  ✓ VCC is a triangle arrow pointing up, with voltage label
+  ✓ GND is 3 horizontal bars (decreasing width)
+  ✓ Junction dots where 3+ wires meet
+  ✓ Reference designators above each symbol
+  ✓ Values below each symbol
+  ✓ Wire colors by net type (red=VCC, green=signal, dark=GND)
+  ✓ Clean 40px grid alignment
+  ✓ Transistor shows proper BJT symbol with base/collector/emitter
+  ✓ LED shows triangle+bar with emission arrows
+
+If the schematic looks like a mind-map with boxes and lines,
+it is WRONG. Rebuild it from scratch using this spec.

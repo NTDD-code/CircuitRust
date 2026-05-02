@@ -306,5 +306,84 @@ export function validateCircuit(
     });
   }
 
+  // ── E007: LED without series current-limiting resistor ─────────────────────
+  // Find every LED in the circuit. For each LED, trace the anode connection.
+  // If the anode connects directly to a power net (not through a resistor), error.
+  for (const [ledId, ledComp] of components) {
+    const isLED = ledComp.type === "LED";
+    if (!isLED) continue;
+
+    const anodeConns = connections.filter(
+      (c) =>
+        (c.to === ledId && c.toPin === "anode") ||
+        (c.from === ledId && c.fromPin === "anode"),
+    );
+
+    for (const aConn of anodeConns) {
+      const srcId = aConn.from === ledId ? aConn.to : aConn.from;
+      const srcNet = nets.get(srcId);
+      if (srcNet && srcNet.type === "power") {
+        // Direct VCC → LED.anode: check if there's a resistor in series
+        const hasSeriesResistor = connections.some((c) => {
+          const otherEnd = c.from === ledId ? c.to : c.from;
+          const otherComp = components.get(otherEnd);
+          if (otherComp?.type !== "Resistor") return false;
+          // That resistor must also connect to the same power net
+          return connections.some(
+            (r) =>
+              (r.from === otherEnd || r.to === otherEnd) &&
+              (r.from === srcId || r.to === srcId),
+          );
+        });
+        if (!hasSeriesResistor) {
+          errors.push({
+            line: ledComp.line,
+            column: 1,
+            message: `E007: LED '${ledId}' is connected directly to power net '${srcId}' without a current-limiting resistor. Add a series resistor (e.g., 220Ω for 5V supply).`,
+            errorCode: "E007",
+            severity: "error",
+            sourceLine: "",
+          });
+        }
+      }
+    }
+  }
+
+  // ── E008: High-current load driven directly by MCU GPIO ────────────────────
+  // High-current types: Buzzer, Motor (and motor-adjacent MCU-driven loads)
+  const HIGH_CURRENT_TYPES = new Set(["Buzzer", "Motor"]);
+  const MCU_TYPES = new Set([
+    "ArduinoUno", "ArduinoNano", "ESP32", "ESP8266",
+    "RaspberryPiPico", "STM32",
+  ]);
+
+  for (const [loadId, loadComp] of components) {
+    if (!HIGH_CURRENT_TYPES.has(loadComp.type)) continue;
+
+    // Find what's driving the load's power pin (vcc, m_pos, pin1...)
+    const powerPins = loadComp.pins.filter((p) => p.type === "power" || p.name === "vcc" || p.name === "m_pos");
+    for (const pin of powerPins) {
+      const drivingConns = connections.filter(
+        (c) =>
+          (c.to === loadId && c.toPin === pin.name) ||
+          (c.from === loadId && c.fromPin === pin.name),
+      );
+      for (const conn of drivingConns) {
+        const driverId = conn.from === loadId ? conn.to : conn.from;
+        const driverComp = components.get(driverId);
+        if (driverComp && MCU_TYPES.has(driverComp.type)) {
+          errors.push({
+            line: conn.line,
+            column: 1,
+            message: `E008: High-current component '${loadId}' (${loadComp.type}) is driven directly by MCU '${driverId}'. Add a transistor driver (e.g., 2N2222 with base resistor) between the MCU GPIO and the load.`,
+            errorCode: "E008",
+            severity: "error",
+            sourceLine: "",
+          });
+        }
+      }
+    }
+  }
+
   return { errors, warnings };
 }
