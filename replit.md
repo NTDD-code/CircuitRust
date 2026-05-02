@@ -29,12 +29,19 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 A professional-grade developer tool for defining, validating, and exporting electronic circuits using Rust-inspired syntax.
 
 **Features:**
-- Code editor with Rust-inspired syntax (`let`, `Component::Type`, `Net::power/ground/signal`, `connect!()`)
-- Validation engine with compiler-style errors (E001–E008) and warnings (W001–W006)
+- Animated splash screen (framer-motion, auto-dismisses at 2.4s)
+- Monaco Editor with `circuit-dsl` language (syntax highlighting, autocomplete, hover, Ctrl+Enter to compile)
+- 3-panel IDE layout: Library sidebar (left, 240px) | Editor+Output (center, flex) | AI Assistant (right, 320px)
+- Compiler-style validation with error markers in Monaco editor
 - Interactive SVG netlist visualizer with category-based component symbols, color-coded nets
-- KiCad/Proteus/SPICE netlist exporter with footprint mapping
-- Component Library browser (37 components, 6 categories)
-- LLM Safety Analysis placeholder (Gemma 2B ready)
+- BOM generator with estimated unit prices + CSV/JSON download
+- KiCad/Proteus/SPICE netlist exporter
+- Component Library browser (37 components, 6 categories, searchable)
+- AI Circuit Generation (Anthropic Claude or Ollama) — generates circuit DSL code from description
+- AI Safety Analysis — scores circuit risks with severity breakdown
+- AI Provider Settings drawer — configure Cloud (Anthropic API key + model) or Local (Ollama URL + model pull/detect)
+- Provider badge in header + status bar shows active AI provider
+- W003 voltage mismatch warnings (5V→3.3V without level shifter)
 
 **Component Library (37 components, 6 categories):**
 - `passive` (7): Resistor, Capacitor, Inductor, Button, Switch, Crystal, Transformer
@@ -68,7 +75,20 @@ A professional-grade developer tool for defining, validating, and exporting elec
 - `artifacts/api-server/src/lib/circuit-netlist.ts` — netlist builder
 - `artifacts/api-server/src/lib/circuit-exporter.ts` — KiCad/Proteus/SPICE exporter
 - `artifacts/api-server/src/routes/compiler.ts` — compile, export, examples, library endpoints
-- `artifacts/api-server/src/routes/llm.ts` — LLM analysis placeholder
+- `artifacts/api-server/src/routes/ai.ts` — Anthropic proxy + Ollama proxy + SSE pull endpoint
 
 **Key frontend files:**
-- `artifacts/circuit-compiler/src/pages/home.tsx` — full UI
+- `artifacts/circuit-compiler/src/pages/home.tsx` — main IDE (3-panel layout, splash, header, output tabs, status bar)
+- `artifacts/circuit-compiler/src/components/splash-screen.tsx` — animated splash
+- `artifacts/circuit-compiler/src/components/circuit-editor.tsx` — Monaco with circuit-dsl language
+- `artifacts/circuit-compiler/src/components/library-panel.tsx` — searchable component sidebar
+- `artifacts/circuit-compiler/src/components/ai-settings-drawer.tsx` — AI provider settings sheet
+- `artifacts/circuit-compiler/src/components/ai-assistant-panel.tsx` — Generate + Safety tabs
+- `artifacts/circuit-compiler/src/components/netlist-graph.tsx` — SVG circuit visualizer
+- `artifacts/circuit-compiler/src/components/bom-panel.tsx` — BOM table + CSV/JSON export
+- `artifacts/circuit-compiler/src/lib/bom.ts` — BOM generation + CSV serialization
+- `artifacts/circuit-compiler/src/lib/ai-provider.ts` — AI provider settings, system prompts, localStorage
+
+**OpenAPI spec:** `lib/api-spec/openapi.yaml` (v0.3.0) — source of truth for all API types and hooks
+- After updating the spec: `pnpm --filter @workspace/api-spec run codegen` → then `pnpm run typecheck:libs`
+- AI endpoints: `POST /api/ai/chat`, `POST /api/ollama/models`, `POST /api/ollama/status`, `POST /api/ollama/pull` (SSE)

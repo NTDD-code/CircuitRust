@@ -3,9 +3,12 @@
  * Do not edit manually.
  * Api
  * Strict Circuit Compiler API
- * OpenAPI spec version: 0.2.0
+ * OpenAPI spec version: 0.3.0
  */
 
+export * from "./aiChatRequest";
+export * from "./aiChatRequestProvider";
+export * from "./aiChatResult";
 export * from "./compileError";
 export * from "./compileErrorSeverity";
 export * from "./compileRequest";
@@ -29,6 +32,11 @@ export * from "./netlistComponentCategory";
 export * from "./netlistComponentProperties";
 export * from "./netlistConnection";
 export * from "./netType";
+export * from "./ollamaModel";
+export * from "./ollamaModelsRequest";
+export * from "./ollamaModelsResult";
+export * from "./ollamaStatusRequest";
+export * from "./ollamaStatusResult";
 export * from "./pin";
 export * from "./pinDirection";
 export * from "./pinType";

@@ -1,0 +1,506 @@
+Build a full-stack web app called "Strict Circuit Compiler" — a Rust-inspired
+circuit design tool where users describe electronic circuits in a strict custom
+syntax. The system compiles, validates, and exports them with AI assistance.
+The app is built for the Vibe Code competition. UI must feel like a real
+professional IDE — dark, fast, and impressive.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+## TECH STACK
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Frontend : React 18 + TypeScript + Tailwind CSS + Vite
+Editor   : Monaco Editor (same engine as VS Code)
+Backend  : Node.js + Express (handles AI proxy routes)
+AI Cloud : Anthropic Claude API  → env secret: ANTHROPIC_API_KEY
+AI Local : Ollama (runs on user's machine, any model they have installed)
+Storage  : localStorage (no database needed)
+Export   : File-saver (CSV, JSON, .net)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+## CORE CONCEPT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+The user writes circuit code in a custom Rust-inspired DSL.
+The compiler enforces STRICT rules — any wiring/logic error immediately
+throws a hard compile error (with code + line number). The circuit CANNOT
+be exported until ALL errors are resolved. Zero tolerance — exactly like
+the Rust compiler. No warnings. Only errors or success.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+## FEATURE 1 — AI PROVIDER SYSTEM (Cloud + Local Ollama)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+This is the most important feature. Build a full AI Provider Manager.
+
+### 1A — Provider Settings Panel (accessible from top-right gear icon)
+
+Show a modal/drawer titled "AI Provider Settings" with two tabs:
+  Tab 1: "☁️ Cloud (Anthropic)"
+  Tab 2: "🖥️ Local (Ollama)"
+
+─── Tab 1: Cloud (Anthropic) ───────────────────────────────
+
+  - Input field: "API Key" (password type, stored in localStorage,
+    never sent to frontend logs)
+  - Dropdown: Model selector
+      • claude-opus-4-5         (most powerful)
+      • claude-sonnet-4-20250514 (recommended — balanced)
+      • claude-haiku-4-5        (fastest, cheapest)
+  - Status badge: shows "✓ Connected" (green) or "✗ Not configured" (red)
+    after user clicks "Test Connection" button
+  - Button: "Save & Use Cloud"
+
+─── Tab 2: Local (Ollama) ──────────────────────────────────
+
+  - Explain in small text:
+    "Ollama runs AI models entirely on your machine.
+     No API key needed. Your data never leaves your computer.
+     Make sure Ollama is running: https://ollama.com"
+
+  - Input field: "Ollama Base URL"
+    Default value pre-filled: http://localhost:11434
+    (user can change if they run Ollama on a different port or LAN IP)
+
+  - Button: "🔍 Detect Running Models"
+    → On click: call GET {baseURL}/api/tags from the backend proxy
+    → Parse the response: extract list of model names from models[].name
+    → Display them as a selectable list with radio buttons:
+        Example list items:
+          ○ llama3:8b          (4.7 GB)
+          ○ mistral:7b         (4.1 GB)
+          ○ deepseek-coder:6.7b (3.8 GB)
+          ○ qwen2.5-coder:7b   (4.5 GB)
+          ○ phi3:mini           (2.3 GB)
+        Show model size from the API response (details[].size → convert to GB)
+
+  - Input field: "Or enter model name manually"
+    Placeholder: "e.g. llama3:8b, codellama:13b, gemma2:9b"
+    (for cases where auto-detect fails)
+
+  - Status indicator:
+    • "✓ Ollama reachable — N model(s) found" (green)
+    • "✗ Cannot reach Ollama at {url}" (red) with help text:
+      "Make sure Ollama is running. Run: ollama serve"
+    • "⚠ Ollama reachable but no models installed" (yellow) with help:
+      "Install a model: ollama pull llama3:8b"
+
+  - Button: "Save & Use Local"
+
+### 1B — Active Provider Display
+
+  - In the top header bar, always show the currently active provider:
+    Cloud mode: "☁️ claude-sonnet-4-20250514"
+    Local mode:  "🖥️ llama3:8b  (local)"
+  - One-click toggle button between Cloud ↔ Local
+    (switches instantly if both are configured)
+
+### 1C — Backend Proxy Routes (Node.js/Express)
+
+The frontend must NEVER call Ollama or Anthropic directly from the browser
+(CORS issues). All AI calls go through the Express backend:
+
+  POST /api/ai/chat
+  Body: {
+    provider: "cloud" | "local",
+    model: string,
+    systemPrompt: string,
+    userMessage: string,
+    ollamaUrl?: string   // only if provider = "local"
+  }
+
+  Backend logic:
+  - If provider = "cloud":
+      → Call Anthropic API using ANTHROPIC_API_KEY from env
+      → Model: body.model
+      → Return: { response: string, provider: "cloud", model: string }
+
+  - If provider = "local":
+      → Call POST {ollamaUrl}/api/generate
+         Body: { model, prompt, stream: false, system: systemPrompt }
+      → Return: { response: string, provider: "local", model: string }
+
+  POST /api/ollama/models
+  Body: { baseUrl: string }
+  → Call GET {baseUrl}/api/tags
+  → Return: { models: [{ name, size, modified }] }
+  (This proxy avoids CORS when calling Ollama from the browser)
+
+  POST /api/ollama/pull  ← BONUS FEATURE (see Feature 1D)
+  POST /api/ollama/status
+  → Check if Ollama is reachable → return { alive: boolean }
+
+### 1D — BONUS: Pull Model From Inside the App
+
+  - In the Local tab, add a section: "Install a New Model"
+  - Input: model name (e.g. "llama3:8b")
+  - Button: "⬇ Pull Model"
+  - On click: call POST /api/ollama/pull
+    Backend calls POST {ollamaUrl}/api/pull with stream: true
+    Stream the response back to frontend using Server-Sent Events (SSE)
+  - Show real-time progress bar in the UI:
+    "Pulling llama3:8b... 47% (2.2 GB / 4.7 GB)"
+    When done: "✓ Model ready. Select it above."
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+## FEATURE 2 — IDE CODE EDITOR (Monaco Editor)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+- Embed Monaco Editor (same engine as VS Code)
+- Register a custom language: "circuit-dsl"
+- Implement tokenizer for syntax highlighting:
+    Purple  → keywords: circuit, let, connect!, net, vcc, gnd
+    Blue    → component namespaces: Component::Transistor, Component::LED,
+              Component::Resistor, Component::Capacitor, Component::IC,
+              Component::Buzzer, Component::Motor, Component::Sensor
+    Teal    → net declarations: Net::VCC, Net::GND, Net::Signal
+    Yellow  → string literals: "2N2222", "TO-92", "10k"
+    Gray    → comments: // this is a comment
+    Orange  → numeric values: 5.0, 3.3, 10000
+    Red     → error squiggles on invalid lines (from compiler output)
+
+- Auto-completion provider:
+    Typing "Component::" → suggests all component types from the library
+    Typing "Net::" → suggests VCC, GND, Signal, PWR
+    Typing "let " → suggests snippet template
+    Typing "connect!(" → shows syntax hint tooltip
+    Typing a declared variable name → suggests its pin names
+      e.g. if user declared "let Q1 = Component::Transistor"
+           typing "Q1." → suggests Q1.base, Q1.collector, Q1.emitter
+
+- Keyboard shortcuts:
+    Ctrl+Enter → Run compiler
+    Ctrl+S     → Save to localStorage
+    Ctrl+Z     → Undo (Monaco built-in)
+    Ctrl+/     → Toggle comment
+
+- Bottom panel: "COMPILER OUTPUT" terminal
+    Black background, monospace font (JetBrains Mono or Fira Code via CDN)
+    Errors: red text "error[E007]: LED D1 has no series resistor — line 14"
+    Success: green text "✓ Compiled successfully — 0 errors — 8 components"
+    Neutral: gray text for info/hints
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+## FEATURE 3 — STRICT VALIDATION ENGINE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Implement a parser + validator that processes the DSL. On compile:
+1. Parse all declarations → build component graph
+2. Parse all connect! statements → build net/node adjacency map
+3. Run all rules below in order
+
+Hard error table — any match = BLOCK EXPORT:
+
+  E001 | Undeclared component used in connect!
+       | "connect!(Q99.base → ...)" but Q99 was never declared
+  E002 | Net connected to itself
+       | "connect!(sig → sig)" — short circuit
+  E003 | VCC connected directly to GND
+       | "connect!(vcc → gnd)" — catastrophic short
+  E004 | Output pin connected to another output pin
+       | Two collectors joined without load — conflict
+  E005 | Input pin declared but never connected (floating input)
+       | A base pin that is never driven
+  E006 | Component declared but never used in any connect!
+  E007 | LED connected without a series current-limiting resistor
+       | Trace the net path: if LED anode → net → VCC with no resistor
+         in the path → E007
+  E008 | High-current component (Motor, Buzzer, Solenoid, Relay)
+       | driven directly from MCU GPIO pin (ESP32, Arduino, STM32)
+       | without a transistor or MOSFET in between → E008
+  E009 | Voltage mismatch on a net
+       | Net::VCC{voltage:5.0} connected to a pin with max_voltage:3.3
+  E010 | Duplicate component identifier
+       | Two "let R1 = ..." declarations
+  E011 | Pin used more than its allowed connection count
+       | e.g. a GPIO pin connected to 5 outputs simultaneously
+  E012 | Missing pull-up/pull-down on open-collector output
+       | Open-collector pin with no resistor to VCC or GND
+  E013 | Capacitor polarity reversed
+       | Electrolytic cap: positive pin connected to lower potential net
+
+Each error output format (exact string):
+  error[E007]: LED 'D1' has no current-limiting resistor in series.
+               Connecting LED directly to VCC will destroy it.
+               → Line 18, Net: vcc_rail
+               fix: add a resistor between VCC and D1.anode
+
+Show all errors at once (like Rust — don't stop at first error).
+After fixing ALL errors: emit success message, unlock export buttons.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+## FEATURE 4 — AI CIRCUIT ASSISTANT PANEL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Right sidebar panel titled "AI Circuit Assistant"
+Shows which provider is active: "Using: 🖥️ llama3:8b (local)"
+
+Two sub-features:
+
+─── 4A: Generate Circuit from Description ──────────────────
+
+  - Textarea: "Describe your circuit in plain English"
+    Placeholder: "Build an IR obstacle sensor using 2N2222 transistor,
+    IR LED pair, indicator LED, buzzer, 10k and 1k resistors, 5V supply"
+  - Button: "⚡ Generate Circuit Code"
+  - On click: call POST /api/ai/chat with this system prompt:
+
+    SYSTEM PROMPT (send verbatim to AI):
+    """
+    You are a strict electronic circuit code generator for the
+    "Strict Circuit Compiler" app. You output ONLY valid circuit DSL code.
+    Never output markdown, explanations, or code fences.
+    Only output raw DSL code starting with: circuit <Name> {
+
+    DSL RULES you must follow exactly:
+    - Declare every component with: let <id> = Component::<Type> { ... }
+    - Declare every net with: let <netname> = Net::<Type> { ... }
+    - Connect with: connect!(<source_pin> -> <dest_pin>);
+    - Every LED MUST have a series resistor or you violate E007
+    - Every high-current load MUST use a transistor driver or violate E008
+    - No floating input pins (E005)
+    - No direct VCC-to-GND (E003)
+    - Add // comments explaining each connection
+
+    Component types available:
+    Transistor, LED, Resistor, Capacitor, Buzzer, Motor,
+    Sensor, IC, MCU, Diode, MOSFET, Relay, Crystal, Switch
+
+    Transistor pins: base, collector, emitter
+    LED pins: anode, cathode
+    Resistor pins: pin1, pin2
+    Capacitor pins: pos, neg
+    Buzzer pins: vcc, gnd_pin
+    MCU pins: gpio0..gpio39, vcc, gnd, en, tx, rx
+
+    Output ONLY DSL code. No explanation. No markdown.
+    """
+
+  - Insert AI response directly into Monaco Editor
+  - Show spinner while waiting
+  - Show which provider responded: "✓ Generated by llama3:8b (local)"
+
+─── 4B: Safety Analysis ────────────────────────────────────
+
+  - Button: "🔍 Analyze Safety" (only active after compile success)
+  - On click: serialize the internal netlist as JSON, send to AI with:
+
+    SYSTEM PROMPT:
+    """
+    You are an electronic circuit safety analyst. You receive a JSON netlist
+    of a compiled circuit. Analyze it and return ONLY a JSON object
+    (no markdown, no explanation) in this exact format:
+    {
+      "safety_score": <0-100>,
+      "risks": [
+        {
+          "severity": "critical|high|medium|low",
+          "component": "<component id>",
+          "issue": "<description>",
+          "fix": "<actionable fix>"
+        }
+      ],
+      "summary": "<2 sentence overall assessment>"
+    }
+    """
+
+  - Parse the JSON response
+  - Display as a beautiful card:
+      Safety Score: large number with color
+        90-100 → green "🟢 Safe"
+        70-89  → yellow "🟡 Review Recommended"
+        50-69  → orange "🟠 Issues Detected"
+        0-49   → red "🔴 Dangerous — Do Not Build"
+      Risk list: each item has severity badge + issue + fix text
+      Summary text at bottom
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+## FEATURE 5 — COMPONENT LIBRARY PANEL (Left Sidebar)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Left sidebar: searchable, categorized component library.
+
+Categories (collapsible accordion sections):
+  🔌 Transistors   : 2N2222, BC547, BC557, TIP120, TIP122, 2N3906
+  💡 LEDs          : Red, Green, Blue, IR, White, UV
+  ⚡ Resistors     : Generic (user enters value)
+  🔋 Capacitors    : Ceramic, Electrolytic, Tantalum
+  🔊 Actuators     : Buzzer (active), Buzzer (passive), DC Motor, Servo
+  🔧 ICs           : L298N, L293D, NE555, LM358, ULN2003
+  📡 Sensors       : IR Receiver, PIR, LDR, DHT11, Ultrasonic HC-SR04
+  🖥️ MCUs          : Arduino Uno, Arduino Nano, ESP32, ESP8266, STM32F103
+  🔆 MOSFETs       : IRF540N, IRF520N, IRLZ44N
+  📦 Passives      : Crystal, Switch, Pushbutton, Potentiometer
+
+Each component card shows:
+  - Component name + package
+  - Max voltage, Max current, Power rating
+  - Pin list with descriptions
+  - Button: "Insert" → inserts a pre-filled let declaration into Monaco Editor
+    Example inserted text for 2N2222:
+    let Q1 = Component::Transistor {
+      model: "2N2222",
+      package: "TO-92",
+      max_vce: 40.0,
+      max_ic: 0.6,
+      hfe: 100
+    };
+
+- Search bar at top of sidebar: filters components by name in real-time
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+## FEATURE 6 — VISUAL SCHEMATIC PREVIEW
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+After successful compile, render a schematic-style visual:
+- Use React Flow or a custom SVG canvas
+- Each component = a styled node box with:
+    Top label: component ID (e.g. "Q1")
+    Middle: component type icon/symbol
+    Bottom: model name (e.g. "2N2222")
+    Pins shown as small dots on the edges
+- Each net = colored edge/wire between pins
+    VCC nets    → red wire
+    GND nets    → black wire
+    Signal nets → blue wire
+    PWM nets    → purple wire
+- Layout: auto-arrange with a simple force-directed or grid algorithm
+- This panel is read-only (no dragging needed, just display)
+- Show a small legend in the corner
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+## FEATURE 7 — BOM GENERATOR & EXPORT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+After compile success, show export toolbar with:
+
+  [📋 Generate BOM]  [📄 Export JSON]  [📁 Export KiCad .net]
+
+"Generate BOM" → parse netlist → display table:
+  | # | Component | Model/Value | Package | Qty | Est. Price (USD) |
+  |---|-----------|-------------|---------|-----|-----------------|
+  | 1 | Transistor | 2N2222     | TO-92   |  2  | $0.10 each      |
+  | 2 | Resistor   | 10kΩ 1/4W  | axial   |  3  | $0.02 each      |
+  | 3 | LED        | IR 940nm   | 5mm     |  1  | $0.15 each      |
+
+  Button below table: "⬇ Download as CSV"
+
+"Export JSON" → download internal netlist as .json file
+
+"Export KiCad .net" → generate KiCad-compatible netlist format:
+  (export
+    (version D)
+    (components
+      (comp (ref Q1)(value 2N2222))
+      ...
+    )
+    (nets
+      (net (code 1)(name "VCC")
+        (node (ref R1)(pin 1))
+      )
+    )
+  )
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+## DSL SYNTAX — PARSER SPEC
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Implement a parser for exactly this syntax:
+
+circuit IRObstacleSensor {
+
+  // ── Components ──────────────────────────────────────────
+  let Q1  = Component::Transistor { model: "2N2222", package: "TO-92",
+                                    max_ic: 0.6, max_vce: 40.0 };
+  let R1  = Component::Resistor   { value: "10k",   tolerance: "5%" };
+  let R2  = Component::Resistor   { value: "1k",    tolerance: "5%" };
+  let D1  = Component::LED        { color: "IR",    vf: 1.2, max_if: 0.05 };
+  let D2  = Component::LED        { color: "red",   vf: 2.0, max_if: 0.02 };
+  let BZ1 = Component::Buzzer     { voltage: 5.0,   current: 0.03 };
+
+  // ── Nets ─────────────────────────────────────────────────
+  let vcc = Net::VCC    { voltage: 5.0 };
+  let gnd = Net::GND;
+  let sig = Net::Signal { name: "trigger" };
+
+  // ── Connections ───────────────────────────────────────────
+  connect!(vcc    -> R1.pin1);           // VCC to resistor
+  connect!(R1.pin2 -> D1.anode);         // Resistor to IR LED anode
+  connect!(D1.cathode -> gnd);           // IR LED to GND
+  connect!(sig    -> R2.pin1);           // Signal to base resistor
+  connect!(R2.pin2 -> Q1.base);          // Base resistor to transistor
+  connect!(vcc    -> BZ1.vcc);           // Buzzer power
+  connect!(Q1.collector -> BZ1.gnd_pin); // Transistor switches buzzer
+  connect!(Q1.emitter   -> gnd);         // Emitter to GND
+  connect!(vcc    -> R3.pin1);           // Indicator LED series R (E007 safe)
+  connect!(R3.pin2 -> D2.anode);
+  connect!(D2.cathode   -> gnd);
+}
+
+Parser must:
+  - Tokenize by line → track line numbers for error reporting
+  - Build a ComponentMap: id → { type, model, pins, metadata }
+  - Build a NetMap: netName → { type, voltage?, connections: [pin refs] }
+  - Build an AdjacencyList for the electrical graph
+  - Export internal AST as JSON for AI safety analysis + KiCad export
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+## UI LAYOUT — EXACT STRUCTURE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+┌─────────────────────────────────────────────────────────────┐
+│ HEADER: "⚡ Strict Circuit Compiler"  [Provider badge] [⚙️] │
+│         tagline: "Write circuits like Rust."                │
+├────────────┬──────────────────────────┬────────────────────┤
+│  LEFT      │  CENTER                  │  RIGHT             │
+│  Component │  Monaco Editor           │  AI Assistant      │
+│  Library   │  (main code area)        │  Panel             │
+│            │                          │                    │
+│  Search    │  [Compile Ctrl+Enter]    │  Provider:         │
+│  ────────  │                          │  ☁️/🖥️ badge       │
+│  📁 BJTs   │  ──────────────────────  │                    │
+│  📁 LEDs   │  COMPILER OUTPUT         │  [Generate from    │
+│  📁 ICs    │  (terminal panel)        │   description]     │
+│  📁 MCUs   │  error/success messages  │                    │
+│  ...       │                          │  [Safety Analysis] │
+├────────────┴──────────────────────────┴────────────────────┤
+│ BOTTOM: Visual Schematic Preview (SVG, shown after compile) │
+│         [Generate BOM] [Export JSON] [Export KiCad .net]   │
+└─────────────────────────────────────────────────────────────┘
+
+- Dark theme only: bg #0d1117, panels #161b22, borders #30363d
+  (GitHub dark palette — familiar to developers)
+- Accent color: electric blue #58a6ff
+- Error color: #f85149
+- Success color: #3fb950
+- Font: JetBrains Mono (load from Google Fonts CDN) for all code areas
+- Resizable panels (drag to resize left/right sidebars)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+## SPLASH SCREEN
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Show a brief splash/landing on first load (disappears after 2s or click):
+  Large heading: "⚡ Strict Circuit Compiler"
+  Subheading:    "Write circuits like Rust."
+                 "If it compiles, it works."
+  Small text:    "AI-powered · Strict validation · Local or Cloud AI"
+  Then animate transition into the main IDE
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+## BUILD ORDER (prioritized for competition deadline)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Build in exactly this order:
+
+  Phase 1 → Express backend skeleton + all /api routes (shell only)
+  Phase 2 → AI Provider Manager: Cloud (Anthropic) working end-to-end
+  Phase 3 → AI Provider Manager: Local (Ollama detect + generate)
+  Phase 4 → Ollama model pull with SSE progress stream
+  Phase 5 → DSL Parser + Validation Engine (all 13 error codes)
+  Phase 6 → Monaco Editor with syntax highlighting + autocomplete
+  Phase 7 → Component Library Panel with Insert buttons
+  Phase 8 → AI Circuit Assistant (generate + safety analysis)
+  Phase 9 → Visual Schematic Preview (SVG/React Flow)
+  Phase 10→ BOM Generator + CSV/JSON/KiCad export
+
+Start now. Begin with Phase 1.

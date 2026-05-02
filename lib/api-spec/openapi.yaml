@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
-  version: 0.2.0
+  version: 0.3.0
   description: Strict Circuit Compiler API
 servers:
   - url: /api
@@ -113,6 +113,63 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/LlmAnalyzeResult"
+
+  /ai/chat:
+    post:
+      operationId: aiChat
+      tags: [llm]
+      summary: Chat with AI provider (cloud Anthropic or local Ollama)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AiChatRequest"
+      responses:
+        "200":
+          description: AI response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiChatResult"
+
+  /ollama/models:
+    post:
+      operationId: getOllamaModels
+      tags: [llm]
+      summary: Get available Ollama models
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OllamaModelsRequest"
+      responses:
+        "200":
+          description: List of Ollama models
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OllamaModelsResult"
+
+  /ollama/status:
+    post:
+      operationId: checkOllamaStatus
+      tags: [llm]
+      summary: Check if Ollama is reachable
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OllamaStatusRequest"
+      responses:
+        "200":
+          description: Ollama status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OllamaStatusResult"
 
 components:
   schemas:
@@ -250,7 +307,7 @@ components:
           enum: [power, ground, signal, analog, digital, bidirectional]
         direction:
           type: string
-          enum: [in, out, passive, power, ground, open_collector]
+          enum: [in, out, passive, power, ground, open_collector, bidirectional]
         maxVoltage:
           type: number
         driveVoltage:
@@ -437,3 +494,93 @@ components:
       required:
         - severity
         - description
+
+    AiChatRequest:
+      type: object
+      properties:
+        provider:
+          type: string
+          enum: [cloud, local]
+        model:
+          type: string
+        systemPrompt:
+          type: string
+        userMessage:
+          type: string
+        apiKey:
+          type: string
+          description: Optional API key override (used for cloud provider)
+        ollamaUrl:
+          type: string
+          description: Ollama base URL (required for local provider)
+      required:
+        - provider
+        - model
+        - systemPrompt
+        - userMessage
+
+    AiChatResult:
+      type: object
+      properties:
+        response:
+          type: string
+        provider:
+          type: string
+        model:
+          type: string
+      required:
+        - response
+        - provider
+        - model
+
+    OllamaModelsRequest:
+      type: object
+      properties:
+        baseUrl:
+          type: string
+      required:
+        - baseUrl
+
+    OllamaModel:
+      type: object
+      properties:
+        name:
+          type: string
+        size:
+          type: number
+        modified:
+          type: string
+      required:
+        - name
+        - size
+
+    OllamaModelsResult:
+      type: object
+      properties:
+        models:
+          type: array
+          items:
+            $ref: "#/components/schemas/OllamaModel"
+        alive:
+          type: boolean
+      required:
+        - models
+        - alive
+
+    OllamaStatusRequest:
+      type: object
+      properties:
+        baseUrl:
+          type: string
+      required:
+        - baseUrl
+
+    OllamaStatusResult:
+      type: object
+      properties:
+        alive:
+          type: boolean
+        version:
+          type: string
+      required:
+        - alive

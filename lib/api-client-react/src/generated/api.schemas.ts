@@ -3,7 +3,7 @@
  * Do not edit manually.
  * Api
  * Strict Circuit Compiler API
- * OpenAPI spec version: 0.2.0
+ * OpenAPI spec version: 0.3.0
  */
 export interface HealthStatus {
   status: string;
@@ -69,6 +69,7 @@ export const PinDirection = {
   power: "power",
   ground: "ground",
   open_collector: "open_collector",
+  bidirectional: "bidirectional",
 } as const;
 
 export interface Pin {
@@ -216,4 +217,53 @@ export interface LlmAnalyzeResult {
   risks: RiskItem[];
   suggestions: string[];
   model: string;
+}
+
+export type AiChatRequestProvider =
+  (typeof AiChatRequestProvider)[keyof typeof AiChatRequestProvider];
+
+export const AiChatRequestProvider = {
+  cloud: "cloud",
+  local: "local",
+} as const;
+
+export interface AiChatRequest {
+  provider: AiChatRequestProvider;
+  model: string;
+  systemPrompt: string;
+  userMessage: string;
+  /** Optional API key override (used for cloud provider) */
+  apiKey?: string;
+  /** Ollama base URL (required for local provider) */
+  ollamaUrl?: string;
+}
+
+export interface AiChatResult {
+  response: string;
+  provider: string;
+  model: string;
+}
+
+export interface OllamaModelsRequest {
+  baseUrl: string;
+}
+
+export interface OllamaModel {
+  name: string;
+  size: number;
+  modified?: string;
+}
+
+export interface OllamaModelsResult {
+  models: OllamaModel[];
+  alive: boolean;
+}
+
+export interface OllamaStatusRequest {
+  baseUrl: string;
+}
+
+export interface OllamaStatusResult {
+  alive: boolean;
+  version?: string;
 }

@@ -5,10 +5,9 @@
  * Strict Circuit Compiler API
  * OpenAPI spec version: 0.3.0
  */
+import type { OllamaModel } from "./ollamaModel";
 
-export interface ExportResult {
-  /** File content of the exported netlist */
-  content: string;
-  filename: string;
-  format: string;
+export interface OllamaModelsResult {
+  models: OllamaModel[];
+  alive: boolean;
 }

@@ -6,9 +6,8 @@
  * OpenAPI spec version: 0.3.0
  */
 
-export interface ExportResult {
-  /** File content of the exported netlist */
-  content: string;
-  filename: string;
-  format: string;
+export interface AiChatResult {
+  response: string;
+  provider: string;
+  model: string;
 }

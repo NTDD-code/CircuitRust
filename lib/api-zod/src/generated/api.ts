@@ -3,7 +3,7 @@
  * Do not edit manually.
  * Api
  * Strict Circuit Compiler API
- * OpenAPI spec version: 0.2.0
+ * OpenAPI spec version: 0.3.0
  */
 import * as zod from "zod";
 
@@ -75,6 +75,7 @@ export const CompileCircuitResponse = zod.object({
                 "power",
                 "ground",
                 "open_collector",
+                "bidirectional",
               ]),
               maxVoltage: zod.number().optional(),
               driveVoltage: zod.number().optional(),
@@ -155,6 +156,7 @@ export const GetComponentLibraryResponse = zod.object({
             "power",
             "ground",
             "open_collector",
+            "bidirectional",
           ]),
           maxVoltage: zod.number().optional(),
           driveVoltage: zod.number().optional(),
@@ -206,6 +208,7 @@ export const ExportNetlistBody = zod.object({
               "power",
               "ground",
               "open_collector",
+              "bidirectional",
             ]),
             maxVoltage: zod.number().optional(),
             driveVoltage: zod.number().optional(),
@@ -284,6 +287,7 @@ export const AnalyzeCircuitSafetyBody = zod.object({
                 "power",
                 "ground",
                 "open_collector",
+                "bidirectional",
               ]),
               maxVoltage: zod.number().optional(),
               driveVoltage: zod.number().optional(),
@@ -332,4 +336,58 @@ export const AnalyzeCircuitSafetyResponse = zod.object({
   ),
   suggestions: zod.array(zod.string()),
   model: zod.string(),
+});
+
+/**
+ * @summary Chat with AI provider (cloud Anthropic or local Ollama)
+ */
+export const AiChatBody = zod.object({
+  provider: zod.enum(["cloud", "local"]),
+  model: zod.string(),
+  systemPrompt: zod.string(),
+  userMessage: zod.string(),
+  apiKey: zod
+    .string()
+    .optional()
+    .describe("Optional API key override (used for cloud provider)"),
+  ollamaUrl: zod
+    .string()
+    .optional()
+    .describe("Ollama base URL (required for local provider)"),
+});
+
+export const AiChatResponse = zod.object({
+  response: zod.string(),
+  provider: zod.string(),
+  model: zod.string(),
+});
+
+/**
+ * @summary Get available Ollama models
+ */
+export const GetOllamaModelsBody = zod.object({
+  baseUrl: zod.string(),
+});
+
+export const GetOllamaModelsResponse = zod.object({
+  models: zod.array(
+    zod.object({
+      name: zod.string(),
+      size: zod.number(),
+      modified: zod.string().optional(),
+    }),
+  ),
+  alive: zod.boolean(),
+});
+
+/**
+ * @summary Check if Ollama is reachable
+ */
+export const CheckOllamaStatusBody = zod.object({
+  baseUrl: zod.string(),
+});
+
+export const CheckOllamaStatusResponse = zod.object({
+  alive: zod.boolean(),
+  version: zod.string().optional(),
 });

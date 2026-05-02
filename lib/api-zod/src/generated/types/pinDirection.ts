@@ -3,7 +3,7 @@
  * Do not edit manually.
  * Api
  * Strict Circuit Compiler API
- * OpenAPI spec version: 0.2.0
+ * OpenAPI spec version: 0.3.0
  */
 
 export type PinDirection = (typeof PinDirection)[keyof typeof PinDirection];
@@ -15,4 +15,5 @@ export const PinDirection = {
   power: "power",
   ground: "ground",
   open_collector: "open_collector",
+  bidirectional: "bidirectional",
 } as const;

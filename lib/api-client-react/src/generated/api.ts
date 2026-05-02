@@ -3,7 +3,7 @@
  * Do not edit manually.
  * Api
  * Strict Circuit Compiler API
- * OpenAPI spec version: 0.2.0
+ * OpenAPI spec version: 0.3.0
  */
 import { useMutation, useQuery } from "@tanstack/react-query";
 import type {
@@ -17,6 +17,8 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  AiChatRequest,
+  AiChatResult,
   CompileRequest,
   CompileResult,
   ComponentLibrary,
@@ -26,6 +28,10 @@ import type {
   HealthStatus,
   LlmAnalyzeRequest,
   LlmAnalyzeResult,
+  OllamaModelsRequest,
+  OllamaModelsResult,
+  OllamaStatusRequest,
+  OllamaStatusResult,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -521,4 +527,262 @@ export const useAnalyzeCircuitSafety = <
   TContext
 > => {
   return useMutation(getAnalyzeCircuitSafetyMutationOptions(options));
+};
+
+/**
+ * @summary Chat with AI provider (cloud Anthropic or local Ollama)
+ */
+export const getAiChatUrl = () => {
+  return `/api/ai/chat`;
+};
+
+export const aiChat = async (
+  aiChatRequest: AiChatRequest,
+  options?: RequestInit,
+): Promise<AiChatResult> => {
+  return customFetch<AiChatResult>(getAiChatUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(aiChatRequest),
+  });
+};
+
+export const getAiChatMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof aiChat>>,
+    TError,
+    { data: BodyType<AiChatRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof aiChat>>,
+  TError,
+  { data: BodyType<AiChatRequest> },
+  TContext
+> => {
+  const mutationKey = ["aiChat"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof aiChat>>,
+    { data: BodyType<AiChatRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return aiChat(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AiChatMutationResult = NonNullable<
+  Awaited<ReturnType<typeof aiChat>>
+>;
+export type AiChatMutationBody = BodyType<AiChatRequest>;
+export type AiChatMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Chat with AI provider (cloud Anthropic or local Ollama)
+ */
+export const useAiChat = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof aiChat>>,
+    TError,
+    { data: BodyType<AiChatRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof aiChat>>,
+  TError,
+  { data: BodyType<AiChatRequest> },
+  TContext
+> => {
+  return useMutation(getAiChatMutationOptions(options));
+};
+
+/**
+ * @summary Get available Ollama models
+ */
+export const getGetOllamaModelsUrl = () => {
+  return `/api/ollama/models`;
+};
+
+export const getOllamaModels = async (
+  ollamaModelsRequest: OllamaModelsRequest,
+  options?: RequestInit,
+): Promise<OllamaModelsResult> => {
+  return customFetch<OllamaModelsResult>(getGetOllamaModelsUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(ollamaModelsRequest),
+  });
+};
+
+export const getGetOllamaModelsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof getOllamaModels>>,
+    TError,
+    { data: BodyType<OllamaModelsRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof getOllamaModels>>,
+  TError,
+  { data: BodyType<OllamaModelsRequest> },
+  TContext
+> => {
+  const mutationKey = ["getOllamaModels"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof getOllamaModels>>,
+    { data: BodyType<OllamaModelsRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return getOllamaModels(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type GetOllamaModelsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof getOllamaModels>>
+>;
+export type GetOllamaModelsMutationBody = BodyType<OllamaModelsRequest>;
+export type GetOllamaModelsMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Get available Ollama models
+ */
+export const useGetOllamaModels = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof getOllamaModels>>,
+    TError,
+    { data: BodyType<OllamaModelsRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof getOllamaModels>>,
+  TError,
+  { data: BodyType<OllamaModelsRequest> },
+  TContext
+> => {
+  return useMutation(getGetOllamaModelsMutationOptions(options));
+};
+
+/**
+ * @summary Check if Ollama is reachable
+ */
+export const getCheckOllamaStatusUrl = () => {
+  return `/api/ollama/status`;
+};
+
+export const checkOllamaStatus = async (
+  ollamaStatusRequest: OllamaStatusRequest,
+  options?: RequestInit,
+): Promise<OllamaStatusResult> => {
+  return customFetch<OllamaStatusResult>(getCheckOllamaStatusUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(ollamaStatusRequest),
+  });
+};
+
+export const getCheckOllamaStatusMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof checkOllamaStatus>>,
+    TError,
+    { data: BodyType<OllamaStatusRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof checkOllamaStatus>>,
+  TError,
+  { data: BodyType<OllamaStatusRequest> },
+  TContext
+> => {
+  const mutationKey = ["checkOllamaStatus"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof checkOllamaStatus>>,
+    { data: BodyType<OllamaStatusRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return checkOllamaStatus(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CheckOllamaStatusMutationResult = NonNullable<
+  Awaited<ReturnType<typeof checkOllamaStatus>>
+>;
+export type CheckOllamaStatusMutationBody = BodyType<OllamaStatusRequest>;
+export type CheckOllamaStatusMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Check if Ollama is reachable
+ */
+export const useCheckOllamaStatus = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof checkOllamaStatus>>,
+    TError,
+    { data: BodyType<OllamaStatusRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof checkOllamaStatus>>,
+  TError,
+  { data: BodyType<OllamaStatusRequest> },
+  TContext
+> => {
+  return useMutation(getCheckOllamaStatusMutationOptions(options));
 };

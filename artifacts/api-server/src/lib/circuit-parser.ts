@@ -1,6 +1,6 @@
 export type PinType = "power" | "ground" | "signal" | "analog" | "digital" | "bidirectional";
 export type NetType = "power" | "ground" | "signal";
-export type PinDirection = "in" | "out" | "passive" | "power" | "ground" | "open_collector";
+export type PinDirection = "in" | "out" | "passive" | "power" | "ground" | "open_collector" | "bidirectional";
 export type ComponentCategory = "passive" | "active_discrete" | "active_ic" | "sensor" | "module" | "power";
 
 export interface ComponentPinDef {
