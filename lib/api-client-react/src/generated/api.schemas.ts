@@ -58,6 +58,7 @@ export const PinType = {
   analog: "analog",
   digital: "digital",
   bidirectional: "bidirectional",
+  passive: "passive",
 } as const;
 
 export type PinDirection = (typeof PinDirection)[keyof typeof PinDirection];
@@ -79,6 +80,7 @@ export interface Pin {
   maxVoltage?: number;
   driveVoltage?: number;
   pinNumber: number;
+  required?: boolean;
   net?: string;
 }
 

@@ -15,4 +15,5 @@ export const PinType = {
   analog: "analog",
   digital: "digital",
   bidirectional: "bidirectional",
+  passive: "passive",
 } as const;

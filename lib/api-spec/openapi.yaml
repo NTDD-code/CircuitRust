@@ -304,7 +304,7 @@ components:
           type: string
         type:
           type: string
-          enum: [power, ground, signal, analog, digital, bidirectional]
+          enum: [power, ground, signal, analog, digital, bidirectional, passive]
         direction:
           type: string
           enum: [in, out, passive, power, ground, open_collector, bidirectional]
@@ -314,6 +314,8 @@ components:
           type: number
         pinNumber:
           type: integer
+        required:
+          type: boolean
         net:
           type: string
       required:

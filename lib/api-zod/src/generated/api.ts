@@ -67,6 +67,7 @@ export const CompileCircuitResponse = zod.object({
                 "analog",
                 "digital",
                 "bidirectional",
+                "passive",
               ]),
               direction: zod.enum([
                 "in",
@@ -80,6 +81,7 @@ export const CompileCircuitResponse = zod.object({
               maxVoltage: zod.number().optional(),
               driveVoltage: zod.number().optional(),
               pinNumber: zod.number(),
+              required: zod.boolean().optional(),
               net: zod.string().optional(),
             }),
           ),
@@ -148,6 +150,7 @@ export const GetComponentLibraryResponse = zod.object({
             "analog",
             "digital",
             "bidirectional",
+            "passive",
           ]),
           direction: zod.enum([
             "in",
@@ -161,6 +164,7 @@ export const GetComponentLibraryResponse = zod.object({
           maxVoltage: zod.number().optional(),
           driveVoltage: zod.number().optional(),
           pinNumber: zod.number(),
+          required: zod.boolean().optional(),
           net: zod.string().optional(),
         }),
       ),
@@ -200,6 +204,7 @@ export const ExportNetlistBody = zod.object({
               "analog",
               "digital",
               "bidirectional",
+              "passive",
             ]),
             direction: zod.enum([
               "in",
@@ -213,6 +218,7 @@ export const ExportNetlistBody = zod.object({
             maxVoltage: zod.number().optional(),
             driveVoltage: zod.number().optional(),
             pinNumber: zod.number(),
+            required: zod.boolean().optional(),
             net: zod.string().optional(),
           }),
         ),
@@ -279,6 +285,7 @@ export const AnalyzeCircuitSafetyBody = zod.object({
                 "analog",
                 "digital",
                 "bidirectional",
+                "passive",
               ]),
               direction: zod.enum([
                 "in",
@@ -292,6 +299,7 @@ export const AnalyzeCircuitSafetyBody = zod.object({
               maxVoltage: zod.number().optional(),
               driveVoltage: zod.number().optional(),
               pinNumber: zod.number(),
+              required: zod.boolean().optional(),
               net: zod.string().optional(),
             }),
           ),

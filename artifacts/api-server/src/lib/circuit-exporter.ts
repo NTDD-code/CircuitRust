@@ -57,8 +57,9 @@ export function exportKicadNetlist(netlist: Netlist, title: string = "circuit"):
 
   for (const comp of netlist.components) {
     const ref = toRefId(comp.name);
-    const value = comp.properties["resistance"] ?? comp.properties["capacitance"]
-      ?? comp.properties["model"] ?? comp.type;
+    const props = comp.properties ?? {};
+    const value = props["resistance"] ?? props["capacitance"]
+      ?? props["model"] ?? comp.type;
     const footprint = toFootprint(comp.type);
     lines.push(`    (comp (ref "${ref}")`);
     lines.push(`      (value "${value}")`);
@@ -113,8 +114,9 @@ export function exportProteusNetlist(netlist: Netlist, title: string = "circuit"
   lines.push(`[COMPONENTS]`);
   for (const comp of netlist.components) {
     const ref = toRefId(comp.name);
-    const value = comp.properties["resistance"] ?? comp.properties["capacitance"]
-      ?? comp.properties["model"] ?? comp.type;
+    const props = comp.properties ?? {};
+    const value = props["resistance"] ?? props["capacitance"]
+      ?? props["model"] ?? comp.type;
     lines.push(`${ref} ${comp.type} ${value}`);
   }
   lines.push(``);
@@ -156,7 +158,8 @@ export function exportSpiceNetlist(netlist: Netlist, title: string = "circuit"):
   for (const comp of netlist.components) {
     const ref = toRefId(comp.name);
     const pinNets = comp.pins.map((p) => p.net ?? "?").join(" ");
-    const value = comp.properties["resistance"] ?? comp.properties["capacitance"] ?? "1";
+    const props = comp.properties ?? {};
+    const value = props["resistance"] ?? props["capacitance"] ?? "1";
     lines.push(`* ${comp.type}`);
     lines.push(`X${ref} ${pinNets} ${comp.type} val="${value}"`);
   }

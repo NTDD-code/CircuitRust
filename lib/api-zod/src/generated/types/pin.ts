@@ -15,5 +15,6 @@ export interface Pin {
   maxVoltage?: number;
   driveVoltage?: number;
   pinNumber: number;
+  required?: boolean;
   net?: string;
 }
