@@ -203,6 +203,7 @@ export const ExportNetlistBody = zod.object({
           "sensor",
           "module",
           "power",
+          "actuator",
         ]),
         voltageLevel: zod.number().optional(),
         pins: zod.array(
@@ -248,7 +249,7 @@ export const ExportNetlistBody = zod.object({
     nets: zod.array(
       zod.object({
         name: zod.string(),
-        type: zod.enum(["power", "ground", "signal"]),
+        type: zod.enum(["power", "ground", "signal", "nc"]),
         voltage: zod.number().optional(),
       }),
     ),
@@ -284,6 +285,7 @@ export const AnalyzeCircuitSafetyBody = zod.object({
             "sensor",
             "module",
             "power",
+            "actuator",
           ]),
           voltageLevel: zod.number().optional(),
           pins: zod.array(
@@ -329,7 +331,7 @@ export const AnalyzeCircuitSafetyBody = zod.object({
       nets: zod.array(
         zod.object({
           name: zod.string(),
-          type: zod.enum(["power", "ground", "signal"]),
+          type: zod.enum(["power", "ground", "signal", "nc"]),
           voltage: zod.number().optional(),
         }),
       ),
