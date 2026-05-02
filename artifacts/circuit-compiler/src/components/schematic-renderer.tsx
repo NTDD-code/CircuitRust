@@ -1,32 +1,30 @@
 import { useState, useRef, useCallback, useMemo, useEffect } from "react";
 import type { Netlist } from "@workspace/api-client-react";
+import { getSymbol, type SymbolDef } from "@/renderer/symbols";
+import { getRegistryEntry } from "@/renderer/componentRegistry";
 
-// ──────────────────────────────────────────────────────────────────────────────
-// PROTEUS-STANDARD COLOR PALETTE
-// ──────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// PALETTE  (Proteus-standard)
+// ─────────────────────────────────────────────────────────────────────────────
 const C = {
-  bg:          "#F5F5F5",
-  gridDot:     "#D0D0D0",
-  sym:         "#1A1A1A",
-  symFill:     "#FFFFFF",
-  labelRef:    "#1A1A1A",
-  labelVal:    "#444444",
-  labelPin:    "#555555",
-  wire:        "#0000FF",
-  wirePwr:     "#FF0000",
-  wireGnd:     "#000000",
-  wireAna:     "#7C3AED",
-  wirePwm:     "#D97706",
-  junction:    "#0000FF",
-  sel:         "#F59E0B",
-  selFill:     "#FFFBEB",
+  bg:       "#F5F5F5",
+  gridDot:  "#D0D0D0",
+  sym:      "#1A1A1A",
+  labelRef: "#1A1A1A",
+  labelVal: "#444444",
+  labelPin: "#555555",
+  wire:     "#0000FF",
+  wirePwr:  "#FF0000",
+  wireGnd:  "#000000",
+  wireAna:  "#7C3AED",
+  wirePwm:  "#D97706",
+  sel:      "#F59E0B",
+  selFill:  "#FFFBEB",
 };
 
-const FONT = "'Roboto Mono', 'JetBrains Mono', 'Courier New', monospace";
-const SNAP = 20;
-const GRID = 20;
-const COMP_HALF_W = 48;
-const COMP_HALF_H = 40;
+const FONT  = "'Roboto Mono', 'JetBrains Mono', 'Courier New', monospace";
+const GRID  = 20;
+const SNAP  = 20;
 const MIN_SPACING = 100;
 
 function wireColor(netType: string): string {
@@ -37,59 +35,17 @@ function wireColor(netType: string): string {
   return C.wire;
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 // TYPES
-// ──────────────────────────────────────────────────────────────────────────────
-type Pt  = { x: number; y: number };
-type Dir = "left" | "right" | "up" | "down";
+// ─────────────────────────────────────────────────────────────────────────────
+type Pt   = { x: number; y: number };
+type Dir  = "left" | "right" | "up" | "down";
 type Rect = { x: number; y: number; w: number; h: number };
 
-// ──────────────────────────────────────────────────────────────────────────────
-// PIN ANCHOR POSITIONS  (relative to component center 0,0)
-// All coordinates snapped to 20px grid multiples
-// ──────────────────────────────────────────────────────────────────────────────
-const PIN_ANCHORS: Record<string, Record<string, Pt>> = {
-  Resistor:         { pin1: { x: -40, y: 0 }, pin2: { x: 40, y: 0 } },
-  Capacitor:        { pin1: { x: -40, y: 0 }, pin2: { x: 40, y: 0 }, pos: { x: -40, y: 0 }, neg: { x: 40, y: 0 } },
-  Inductor:         { pin1: { x: -40, y: 0 }, pin2: { x: 40, y: 0 } },
-  Button:           { pin1: { x: -40, y: 0 }, pin2: { x: 40, y: 0 } },
-  Switch:           { pin1: { x: -40, y: 0 }, pin2: { x: 40, y: 0 } },
-  Crystal:          { pin1: { x: -40, y: 0 }, pin2: { x: 40, y: 0 } },
-  LED:              { anode: { x: -40, y: 0 }, cathode: { x: 40, y: 0 } },
-  Diode:            { anode: { x: -40, y: 0 }, cathode: { x: 40, y: 0 } },
-  ZenerDiode:       { anode: { x: -40, y: 0 }, cathode: { x: 40, y: 0 } },
-  SchottkyDiode:    { anode: { x: -40, y: 0 }, cathode: { x: 40, y: 0 } },
-  TVSDiode:         { anode: { x: -40, y: 0 }, cathode: { x: 40, y: 0 } },
-  InfraredEmitter:  { anode: { x: -40, y: 0 }, cathode: { x: 40, y: 0 } },
-  InfraredDetector: { anode: { x: -40, y: 0 }, cathode: { x: 40, y: 0 } },
-  NPN:              { base: { x: -40, y: 0 }, collector: { x: 40, y: -40 }, emitter: { x: 40, y: 40 } },
-  PNP:              { base: { x: -40, y: 0 }, collector: { x: 40, y: -40 }, emitter: { x: 40, y: 40 } },
-  Transistor:       { base: { x: -40, y: 0 }, collector: { x: 40, y: -40 }, emitter: { x: 40, y: 40 } },
-  NMOSFET:          { gate: { x: -40, y: 0 }, drain: { x: 40, y: -40 }, source: { x: 40, y: 40 } },
-  PMOSFET:          { gate: { x: -40, y: 0 }, drain: { x: 40, y: -40 }, source: { x: 40, y: 40 } },
-  Buzzer:           { vcc: { x: 0, y: -40 }, gnd: { x: 0, y: 40 } },
-  Motor:            { m_pos: { x: -40, y: 0 }, m_neg: { x: 40, y: 0 } },
-  Relay:            { coil_a: { x: -40, y: -20 }, coil_b: { x: -40, y: 20 }, com: { x: 40, y: 0 }, no: { x: 40, y: -20 }, nc: { x: 40, y: 20 } },
-};
-
-function compBounds(type: string, pins: string[]): { hw: number; hh: number } {
-  if (PIN_ANCHORS[type]) {
-    return { hw: COMP_HALF_W, hh: COMP_HALF_H };
-  }
-  const left  = pins.filter((_, i) => i % 2 === 0);
-  const right = pins.filter((_, i) => i % 2 !== 0);
-  const rows  = Math.max(left.length, right.length);
-  const hh    = (rows * 18 + 20) / 2;
-  return { hw: 56 + 12, hh };
-}
-
-function pinDir(anchor: Pt): Dir {
-  if (Math.abs(anchor.x) >= Math.abs(anchor.y)) {
-    return anchor.x <= 0 ? "left" : "right";
-  }
-  return anchor.y < 0 ? "up" : "down";
-}
-
+// ─────────────────────────────────────────────────────────────────────────────
+// PIN RESOLUTION
+// Reads anchors from the symbol library; falls back to dynamic IC layout.
+// ─────────────────────────────────────────────────────────────────────────────
 function getICAnchors(pins: string[]): Record<string, Pt> {
   const left  = pins.filter((_, i) => i % 2 === 0);
   const right = pins.filter((_, i) => i % 2 !== 0);
@@ -102,212 +58,187 @@ function getICAnchors(pins: string[]): Record<string, Pt> {
   return out;
 }
 
-function resolveAnchor(type: string, pinName: string, allPins: string[]): Pt {
-  const typed = PIN_ANCHORS[type];
-  if (typed?.[pinName]) return typed[pinName];
-  const ic = getICAnchors(allPins);
-  return ic[pinName] ?? { x: 0, y: 0 };
+function resolveAnchor(symbolId: string, sym: SymbolDef | undefined, pinName: string, allPins: string[]): Pt {
+  if (sym?.pins[pinName]) return { x: sym.pins[pinName].x, y: sym.pins[pinName].y };
+  if (symbolId === "IC")  return getICAnchors(allPins)[pinName] ?? { x: 0, y: 0 };
+  return { x: 0, y: 0 };
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
-// OBSTACLE-AWARE MANHATTAN ROUTING
-// ──────────────────────────────────────────────────────────────────────────────
-
-function snapPt(p: number): number {
-  return Math.round(p / GRID) * GRID;
+function resolveDir(sym: SymbolDef | undefined, pinName: string, allPins: string[]): Dir {
+  if (sym?.pins[pinName]) return sym.pins[pinName].dir;
+  const anchor = getICAnchors(allPins)[pinName];
+  if (!anchor) return "right";
+  return anchor.x < 0 ? "left" : "right";
 }
 
-function segmentsIntersectRect(ax: number, ay: number, bx: number, by: number, rect: Rect): boolean {
-  const { x, y, w, h } = rect;
-  const rx1 = x, ry1 = y, rx2 = x + w, ry2 = y + h;
+function snapN(v: number): number { return Math.round(v / GRID) * GRID; }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MANHATTAN ROUTING WITH OBSTACLE AVOIDANCE
+// ─────────────────────────────────────────────────────────────────────────────
+function segHitsRect(ax: number, ay: number, bx: number, by: number, r: Rect): boolean {
+  const rx1 = r.x, ry1 = r.y, rx2 = r.x + r.w, ry2 = r.y + r.h;
   if (ax === bx) {
-    const lx = ax;
-    if (lx <= rx1 || lx >= rx2) return false;
-    const minY = Math.min(ay, by), maxY = Math.max(ay, by);
-    return maxY > ry1 && minY < ry2;
+    if (ax <= rx1 || ax >= rx2) return false;
+    const lo = Math.min(ay, by), hi = Math.max(ay, by);
+    return hi > ry1 && lo < ry2;
   } else {
-    const ly = ay;
-    if (ly <= ry1 || ly >= ry2) return false;
-    const minX = Math.min(ax, bx), maxX = Math.max(ax, bx);
-    return maxX > rx1 && minX < rx2;
+    if (ay <= ry1 || ay >= ry2) return false;
+    const lo = Math.min(ax, bx), hi = Math.max(ax, bx);
+    return hi > rx1 && lo < rx2;
   }
 }
 
-function routeWireObstacle(from: Pt, fromDir: Dir, to: Pt, toDir: Dir, obstacles: Rect[]): string {
+function buildPath(pts: Pt[]): string {
+  if (!pts.length) return "";
+  let d = `M${pts[0].x},${pts[0].y}`;
+  for (let i = 1; i < pts.length; i++) {
+    const p = pts[i], q = pts[i - 1];
+    d += p.x === q.x ? ` V${p.y}` : ` H${p.x}`;
+  }
+  return d;
+}
+
+function routeWire(from: Pt, fromDir: Dir, to: Pt, toDir: Dir, obstacles: Rect[]): string {
   const EXT = GRID * 2;
-  const snap = (v: number) => Math.round(v / GRID) * GRID;
+  const sn  = snapN;
 
-  const fx = snap(from.x), fy = snap(from.y);
-  const tx = snap(to.x),   ty = snap(to.y);
+  const fx = sn(from.x), fy = sn(from.y);
+  const tx = sn(to.x),   ty = sn(to.y);
 
-  const stubPt = (p: Pt, d: Dir, len: number): Pt => {
+  const stub = (p: Pt, d: Dir, len: number): Pt => {
     if (d === "right") return { x: p.x + len, y: p.y };
     if (d === "left")  return { x: p.x - len, y: p.y };
     if (d === "up")    return { x: p.x, y: p.y - len };
     return { x: p.x, y: p.y + len };
   };
 
-  const f = stubPt({ x: fx, y: fy }, fromDir, EXT);
-  const t = stubPt({ x: tx, y: ty }, toDir, EXT);
+  const f = stub({ x: fx, y: fy }, fromDir, EXT);
+  const t = stub({ x: tx, y: ty }, toDir,   EXT);
 
-  function segHitsObstacle(ax: number, ay: number, bx: number, by: number): boolean {
-    return obstacles.some((r) => segmentsIntersectRect(ax, ay, bx, by, r));
-  }
-
-  function buildPath(pts: Pt[]): string {
-    if (pts.length === 0) return "";
-    let d = `M${pts[0].x},${pts[0].y}`;
-    for (let i = 1; i < pts.length; i++) {
-      const prev = pts[i - 1], cur = pts[i];
-      if (prev.x === cur.x) d += ` V${cur.y}`;
-      else                   d += ` H${cur.x}`;
-    }
-    return d;
-  }
-
-  const tryPath = (pts: Pt[]): string | null => {
+  const clean = (pts: Pt[]): string | null => {
     for (let i = 0; i < pts.length - 1; i++) {
-      if (segHitsObstacle(pts[i].x, pts[i].y, pts[i + 1].x, pts[i + 1].y)) return null;
+      if (obstacles.some((r) => segHitsRect(pts[i].x, pts[i].y, pts[i + 1].x, pts[i + 1].y, r)))
+        return null;
     }
     return buildPath(pts);
   };
 
-  // Candidate routes to try (all Manhattan)
   const candidates: Pt[][] = [];
+  const offsets = [-3, 3, -6, 6, -9, 9].map((n) => n * GRID);
 
   if ((fromDir === "right" || fromDir === "left") && (toDir === "right" || toDir === "left")) {
-    const midX = snap((f.x + t.x) / 2);
+    const midX = sn((f.x + t.x) / 2);
     candidates.push([{ x: fx, y: fy }, f, { x: midX, y: f.y }, { x: midX, y: t.y }, t, { x: tx, y: ty }]);
-    const offsets = [-GRID * 3, GRID * 3, -GRID * 6, GRID * 6, -GRID * 9, GRID * 9];
     for (const off of offsets) {
-      const vy = snap(f.y + off);
+      const vy = sn(f.y + off);
       candidates.push([{ x: fx, y: fy }, f, { x: midX, y: f.y }, { x: midX, y: vy }, { x: t.x, y: vy }, t, { x: tx, y: ty }]);
     }
   } else if ((fromDir === "up" || fromDir === "down") && (toDir === "up" || toDir === "down")) {
-    const midY = snap((f.y + t.y) / 2);
+    const midY = sn((f.y + t.y) / 2);
     candidates.push([{ x: fx, y: fy }, f, { x: f.x, y: midY }, { x: t.x, y: midY }, t, { x: tx, y: ty }]);
-    const offsets = [-GRID * 3, GRID * 3, -GRID * 6, GRID * 6];
-    for (const off of offsets) {
-      const vx = snap(f.x + off);
+    for (const off of offsets.slice(0, 4)) {
+      const vx = sn(f.x + off);
       candidates.push([{ x: fx, y: fy }, f, { x: f.x, y: midY }, { x: vx, y: midY }, { x: vx, y: t.y }, t, { x: tx, y: ty }]);
     }
   } else if ((fromDir === "right" || fromDir === "left") && (toDir === "up" || toDir === "down")) {
     candidates.push([{ x: fx, y: fy }, f, { x: t.x, y: f.y }, t, { x: tx, y: ty }]);
-    const offsets = [-GRID * 3, GRID * 3, -GRID * 6, GRID * 6];
-    for (const off of offsets) {
-      const vx = snap(f.x + off);
+    for (const off of offsets.slice(0, 4)) {
+      const vx = sn(f.x + off);
       candidates.push([{ x: fx, y: fy }, f, { x: vx, y: f.y }, { x: vx, y: t.y }, t, { x: tx, y: ty }]);
     }
   } else {
     candidates.push([{ x: fx, y: fy }, f, { x: f.x, y: t.y }, t, { x: tx, y: ty }]);
-    const offsets = [-GRID * 3, GRID * 3, -GRID * 6, GRID * 6];
-    for (const off of offsets) {
-      const vy = snap(f.y + off);
+    for (const off of offsets.slice(0, 4)) {
+      const vy = sn(f.y + off);
       candidates.push([{ x: fx, y: fy }, f, { x: f.x, y: vy }, { x: t.x, y: vy }, t, { x: tx, y: ty }]);
     }
   }
 
-  for (const cand of candidates) {
-    const p = tryPath(cand);
+  for (const c of candidates) {
+    const p = clean(c);
     if (p !== null) return p;
   }
-
   return buildPath(candidates[0]);
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
-// WIRE SEGMENT EXTRACTION (for label collision detection)
-// ──────────────────────────────────────────────────────────────────────────────
-function extractSegments(pathD: string): Array<{ x1: number; y1: number; x2: number; y2: number }> {
-  const segs: Array<{ x1: number; y1: number; x2: number; y2: number }> = [];
+// ─────────────────────────────────────────────────────────────────────────────
+// SEGMENT EXTRACTION (for junction + label-collision detection)
+// ─────────────────────────────────────────────────────────────────────────────
+type Seg = { x1: number; y1: number; x2: number; y2: number };
+
+function extractSegments(pathD: string): Seg[] {
+  const segs: Seg[] = [];
   const tokens = pathD.replace(/([A-Z])/g, " $1 ").trim().split(/\s+/);
-  let cx = 0, cy = 0;
-  let i = 0;
+  let cx = 0, cy = 0, i = 0;
   while (i < tokens.length) {
     const cmd = tokens[i];
-    if (cmd === "M") {
-      const [px, py] = tokens[i + 1].split(",").map(Number);
-      cx = px; cy = py;
-      i += 2;
-    } else if (cmd === "H") {
-      const nx = Number(tokens[i + 1]);
-      if (nx !== cx) segs.push({ x1: cx, y1: cy, x2: nx, y2: cy });
-      cx = nx; i += 2;
-    } else if (cmd === "V") {
-      const ny = Number(tokens[i + 1]);
-      if (ny !== cy) segs.push({ x1: cx, y1: cy, x2: cx, y2: ny });
-      cy = ny; i += 2;
-    } else {
-      i++;
-    }
+    if (cmd === "M") { [cx, cy] = tokens[i + 1].split(",").map(Number); i += 2; }
+    else if (cmd === "H") { const nx = +tokens[i + 1]; if (nx !== cx) segs.push({ x1: cx, y1: cy, x2: nx, y2: cy }); cx = nx; i += 2; }
+    else if (cmd === "V") { const ny = +tokens[i + 1]; if (ny !== cy) segs.push({ x1: cx, y1: cy, x2: cx, y2: ny }); cy = ny; i += 2; }
+    else i++;
   }
   return segs;
 }
 
-function ptOnSegment(px: number, py: number, seg: { x1: number; y1: number; x2: number; y2: number }, tol = 14): boolean {
+function ptNearSeg(px: number, py: number, seg: Seg, tol = 14): boolean {
   const { x1, y1, x2, y2 } = seg;
   if (x1 === x2) {
     if (Math.abs(px - x1) > tol) return false;
     return py >= Math.min(y1, y2) - tol && py <= Math.max(y1, y2) + tol;
-  } else {
-    if (Math.abs(py - y1) > tol) return false;
-    return px >= Math.min(x1, x2) - tol && px <= Math.max(x1, x2) + tol;
   }
+  if (Math.abs(py - y1) > tol) return false;
+  return px >= Math.min(x1, x2) - tol && px <= Math.max(x1, x2) + tol;
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
-// SVG COMPONENT SYMBOLS (IEEE/IEC style)
-// ──────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// STAMP COMPONENT — fetches SVG body from symbol library and renders it
+// ─────────────────────────────────────────────────────────────────────────────
+function StampSymbol({
+  symbolId,
+  componentType,
+  pinNames,
+  properties,
+}: {
+  symbolId:      string;
+  componentType: string;
+  pinNames:      string[];
+  properties?:   Record<string, string>;
+}) {
+  if (symbolId === "IC") {
+    return <ICStamp pins={pinNames} label={componentType} />;
+  }
 
-function ResistorSVG() {
+  const sym = getSymbol(symbolId);
+  if (!sym) return <ICStamp pins={pinNames} label={componentType} />;
+
+  let body = sym.body;
+
+  // Runtime substitution: LED fill colour
+  if (symbolId === "LED") {
+    const color = properties?.["color"] ?? properties?.["model"] ?? "";
+    const fill  = ledFill(color);
+    body = body.replace("__LED_FILL__", fill);
+  }
+
+  // Polar capacitor override
+  if (componentType === "Capacitor") {
+    const isPolar = properties?.["type"] === "electrolytic" || properties?.["type"] === "tantalum";
+    if (isPolar) {
+      const polarSym = getSymbol("CAPACITOR_POLAR");
+      if (polarSym) body = polarSym.body;
+    }
+  }
+
   return (
-    <g stroke={C.sym} strokeWidth="1.5" fill="none">
-      <line x1="-40" y1="0" x2="-20" y2="0" />
-      <polyline points="-20,0 -15,-8 -8,8 0,-8 8,8 15,-8 20,0" fill="none" />
-      <line x1="20" y1="0" x2="40" y2="0" />
-    </g>
+    <g
+      color={C.sym}
+      dangerouslySetInnerHTML={{ __html: body }}
+    />
   );
 }
 
-function CapSVG({ polar = false }: { polar?: boolean }) {
-  return (
-    <g stroke={C.sym} strokeWidth="1.5" fill="none">
-      <line x1="-40" y1="0" x2="-6" y2="0" />
-      {polar
-        ? <path d="M-6,-16 Q2,-16 2,0 Q2,16 -6,16" fill="none" />
-        : <line x1="-6" y1="-16" x2="-6" y2="16" />}
-      <line x1="6" y1="-16" x2="6" y2="16" />
-      <line x1="6" y1="0" x2="40" y2="0" />
-      {polar && <text x="-16" y="-18" fontSize="9" fill={C.wirePwr} textAnchor="middle" fontFamily={FONT}>+</text>}
-    </g>
-  );
-}
-
-function InductorSVG() {
-  return (
-    <g stroke={C.sym} strokeWidth="1.5" fill="none">
-      <line x1="-40" y1="0" x2="-20" y2="0" />
-      <path d="M-20,0 A5,5 0 0,1 -10,0 A5,5 0,0,1 0,0 A5,5 0,0,1 10,0 A5,5 0,0,1 20,0" />
-      <line x1="20" y1="0" x2="40" y2="0" />
-    </g>
-  );
-}
-
-function DiodeSVG({ variant = "plain" }: { variant?: "plain" | "zener" | "schottky" | "tvs" }) {
-  return (
-    <g stroke={C.sym} strokeWidth="1.5" fill="none">
-      <line x1="-40" y1="0" x2="-14" y2="0" />
-      <polygon points="-14,-12 -14,12 12,0" fill={C.symFill} stroke={C.sym} />
-      {variant === "zener"    && <path d="M12,-12 L16,-8 M12,12 L8,8" />}
-      {variant === "schottky" && <path d="M12,-12 Q14,-12 14,-9 M12,12 Q10,12 10,9" />}
-      {variant === "tvs"      && <><line x1="12" y1="-14" x2="12" y2="14" /><line x1="8" y1="-14" x2="16" y2="-14" /><line x1="8" y1="14" x2="16" y2="14" /></>}
-      {variant === "plain"    && <line x1="12" y1="-12" x2="12" y2="12" />}
-      <line x1="12" y1="0" x2="40" y2="0" />
-    </g>
-  );
-}
-
-function LEDColor(color?: string): string {
+function ledFill(color: string): string {
   switch (color) {
     case "red":    return "#EF4444";
     case "green":  return "#22C55E";
@@ -320,181 +251,7 @@ function LEDColor(color?: string): string {
   }
 }
 
-function LEDSVG({ color }: { color?: string }) {
-  const fill = LEDColor(color);
-  return (
-    <g stroke={C.sym} strokeWidth="1.5" fill="none">
-      <defs>
-        <marker id="led-arr" markerWidth="5" markerHeight="5" refX="5" refY="2.5" orient="auto">
-          <path d="M0,0 L5,2.5 L0,5 Z" fill={C.wire} stroke="none" />
-        </marker>
-      </defs>
-      <line x1="-40" y1="0" x2="-14" y2="0" />
-      <polygon points="-14,-12 -14,12 12,0" fill={fill} fillOpacity="0.4" stroke={C.sym} />
-      <line x1="12" y1="-12" x2="12" y2="12" />
-      <line x1="12" y1="0" x2="40" y2="0" />
-      <line x1="14" y1="-8" x2="26" y2="-20" stroke={C.wire} markerEnd="url(#led-arr)" />
-      <line x1="20" y1="-4" x2="32" y2="-16" stroke={C.wire} markerEnd="url(#led-arr)" />
-    </g>
-  );
-}
-
-function IREmitterSVG() {
-  return (
-    <g stroke={C.sym} strokeWidth="1.5" fill="none">
-      <defs>
-        <marker id="ir-arr-out" markerWidth="5" markerHeight="5" refX="5" refY="2.5" orient="auto">
-          <path d="M0,0 L5,2.5 L0,5 Z" fill="#7C3AED" stroke="none" />
-        </marker>
-      </defs>
-      <line x1="-40" y1="0" x2="-14" y2="0" />
-      <polygon points="-14,-12 -14,12 12,0" fill="#EDE9FE" fillOpacity="0.5" stroke={C.sym} />
-      <line x1="12" y1="-12" x2="12" y2="12" />
-      <line x1="12" y1="0" x2="40" y2="0" />
-      <line x1="14" y1="-8" x2="26" y2="-20" stroke="#7C3AED" strokeDasharray="3,1.5" markerEnd="url(#ir-arr-out)" />
-      <line x1="20" y1="-4" x2="32" y2="-16" stroke="#7C3AED" strokeDasharray="3,1.5" markerEnd="url(#ir-arr-out)" />
-    </g>
-  );
-}
-
-function IRDetectorSVG() {
-  return (
-    <g stroke={C.sym} strokeWidth="1.5" fill="none">
-      <defs>
-        <marker id="ir-arr-in" markerWidth="5" markerHeight="5" refX="5" refY="2.5" orient="auto">
-          <path d="M0,0 L5,2.5 L0,5 Z" fill="#7C3AED" stroke="none" />
-        </marker>
-      </defs>
-      <line x1="-40" y1="0" x2="-14" y2="0" />
-      <polygon points="-14,-12 -14,12 12,0" fill="#F5F3FF" fillOpacity="0.5" stroke={C.sym} />
-      <line x1="12" y1="-12" x2="12" y2="12" />
-      <line x1="12" y1="0" x2="40" y2="0" />
-      <line x1="30" y1="-20" x2="18" y2="-8" stroke="#7C3AED" strokeDasharray="3,1.5" markerEnd="url(#ir-arr-in)" />
-      <line x1="36" y1="-16" x2="24" y2="-4" stroke="#7C3AED" strokeDasharray="3,1.5" markerEnd="url(#ir-arr-in)" />
-    </g>
-  );
-}
-
-function NPNSVG() {
-  return (
-    <g stroke={C.sym} strokeWidth="1.5" fill="none">
-      <circle cx="0" cy="0" r="28" fill={C.symFill} stroke={C.sym} />
-      <line x1="-40" y1="0" x2="-16" y2="0" />
-      <line x1="-16" y1="-22" x2="-16" y2="22" strokeWidth="2.5" />
-      <line x1="-16" y1="-13" x2="24" y2="-34" />
-      <line x1="-16" y1="13"  x2="24" y2="34" />
-      <polygon points="14,26 26,36 20,40" fill={C.sym} stroke="none" />
-      <line x1="24" y1="-34" x2="40" y2="-40" />
-      <line x1="24" y1="34"  x2="40" y2="40" />
-      <text x="6" y="-6" fontSize="7" fill={C.labelPin} fontFamily={FONT}>C</text>
-      <text x="6" y="14" fontSize="7" fill={C.labelPin} fontFamily={FONT}>E</text>
-    </g>
-  );
-}
-
-function PNPSVG() {
-  return (
-    <g stroke={C.sym} strokeWidth="1.5" fill="none">
-      <circle cx="0" cy="0" r="28" fill={C.symFill} stroke={C.sym} />
-      <line x1="-40" y1="0" x2="-16" y2="0" />
-      <line x1="-16" y1="-22" x2="-16" y2="22" strokeWidth="2.5" />
-      <line x1="-16" y1="-13" x2="24" y2="-34" />
-      <line x1="-16" y1="13"  x2="24" y2="34" />
-      <polygon points="-6,-10 -16,-13 -12,-6" fill={C.sym} stroke="none" />
-      <line x1="24" y1="-34" x2="40" y2="-40" />
-      <line x1="24" y1="34"  x2="40" y2="40" />
-    </g>
-  );
-}
-
-function MOSFETSVG({ n = true }: { n?: boolean }) {
-  return (
-    <g stroke={C.sym} strokeWidth="1.5" fill="none">
-      <circle cx="0" cy="0" r="28" fill={C.symFill} stroke={C.sym} />
-      <line x1="-40" y1="0" x2="-14" y2="0" />
-      <line x1="-14" y1="-22" x2="-14" y2="22" />
-      <line x1="-10" y1="-22" x2="-10" y2="-6" />
-      <line x1="-10" y1="6"   x2="-10" y2="22" />
-      <line x1="-10" y1="-13" x2="22" y2="-32" />
-      <line x1="-10" y1="13"  x2="22" y2="32" />
-      <line x1="-10" y1="0"   x2="4"  y2="0" />
-      {n
-        ? <polygon points="12,24 24,32 20,38" fill={C.sym} stroke="none" />
-        : <polygon points="-4,-12 -12,-10 -8,-4" fill={C.sym} stroke="none" />}
-      <line x1="22" y1="-32" x2="40" y2="-40" />
-      <line x1="22" y1="32"  x2="40" y2="40" />
-      <text x="2" y="4" fontSize="7" fill={C.labelPin} textAnchor="middle" fontFamily={FONT}>{n ? "N" : "P"}</text>
-    </g>
-  );
-}
-
-function BuzzerSVG() {
-  return (
-    <g stroke={C.sym} strokeWidth="1.5" fill="none">
-      <rect x="-14" y="-22" width="28" height="20" rx="2" fill={C.symFill} stroke={C.sym} />
-      <path d="M14,-32 Q34,-32 34,-12 Q34,8 14,8" />
-      <path d="M14,-22 Q24,-22 24,-12 Q24,-2 14,-2" />
-      <line x1="0" y1="-22" x2="0" y2="-40" />
-      <line x1="0" y1="-2"  x2="0" y2="40" />
-      <text x="-4" y="-26" fontSize="8" fill={C.wirePwr} fontFamily={FONT}>+</text>
-    </g>
-  );
-}
-
-function CrystalSVG() {
-  return (
-    <g stroke={C.sym} strokeWidth="1.5" fill="none">
-      <line x1="-40" y1="0" x2="-16" y2="0" />
-      <line x1="-16" y1="-14" x2="-16" y2="14" />
-      <rect x="-12" y="-12" width="24" height="24" rx="1" fill={C.symFill} stroke={C.sym} />
-      <line x1="12" y1="-14" x2="12" y2="14" />
-      <line x1="12" y1="0" x2="40" y2="0" />
-    </g>
-  );
-}
-
-function SwitchSVG() {
-  return (
-    <g stroke={C.sym} strokeWidth="1.5" fill="none">
-      <line x1="-40" y1="0" x2="-14" y2="0" />
-      <circle cx="-14" cy="0" r="3" fill={C.sym} />
-      <line x1="-12" y1="-6" x2="12" y2="-16" stroke={C.sym} />
-      <circle cx="14" cy="0" r="3" fill={C.sym} />
-      <line x1="14" y1="0" x2="40" y2="0" />
-    </g>
-  );
-}
-
-function MotorSVG() {
-  return (
-    <g stroke={C.sym} strokeWidth="1.5" fill="none">
-      <circle cx="0" cy="0" r="26" fill={C.symFill} stroke={C.sym} />
-      <text x="0" y="5" textAnchor="middle" fontSize="15" fontWeight="bold" fill={C.sym} fontFamily={FONT}>M</text>
-      <line x1="-40" y1="0" x2="-26" y2="0" />
-      <line x1="26"  y1="0" x2="40"  y2="0" />
-    </g>
-  );
-}
-
-function RelaySVG() {
-  return (
-    <g stroke={C.sym} strokeWidth="1.5" fill="none">
-      <rect x="-28" y="-28" width="28" height="56" rx="2" fill={C.symFill} stroke={C.sym} />
-      <path d="M-22,-14 Q-16,-14 -16,-7 Q-16,0 -22,0 Q-16,0 -16,7 Q-16,14 -22,14" />
-      <line x1="-40" y1="-20" x2="-28" y2="-20" />
-      <line x1="-40" y1="20"  x2="-28" y2="20" />
-      <line x1="0" y1="0"   x2="40" y2="0" />
-      <line x1="0" y1="-20" x2="40" y2="-20" />
-      <line x1="0" y1="20"  x2="40" y2="20" />
-      <circle cx="4" cy="-20" r="3" fill={C.sym} />
-      <line x1="4" y1="-20" x2="18" y2="-8" strokeWidth="2" />
-      <circle cx="18" cy="0" r="3" fill="none" stroke={C.sym} />
-      <circle cx="18" cy="20" r="3" fill="none" stroke={C.sym} />
-    </g>
-  );
-}
-
-function ICSVG({ pins, label }: { pins: string[]; label: string }) {
+function ICStamp({ pins, label }: { pins: string[]; label: string }) {
   const left  = pins.filter((_, i) => i % 2 === 0);
   const right = pins.filter((_, i) => i % 2 !== 0);
   const rows  = Math.max(left.length, right.length);
@@ -503,7 +260,7 @@ function ICSVG({ pins, label }: { pins: string[]; label: string }) {
   const hw    = 56;
   return (
     <g stroke={C.sym} strokeWidth="1.5" fill="none">
-      <rect x={-hw} y={-half} width={hw * 2} height={h} rx="3" fill={C.symFill} stroke={C.sym} />
+      <rect x={-hw} y={-half} width={hw * 2} height={h} rx="3" fill="white" stroke={C.sym} />
       <text x="0" y="6" textAnchor="middle" fontSize="9" fill={C.labelRef} fontFamily={FONT} fontWeight="bold">
         {label.slice(0, 10)}
       </text>
@@ -529,48 +286,10 @@ function ICSVG({ pins, label }: { pins: string[]; label: string }) {
   );
 }
 
-function CompSymbol({
-  type,
-  pins,
-  properties,
-}: {
-  type: string;
-  pins: string[];
-  properties?: Record<string, string>;
-}) {
-  const isPolar = properties?.["type"] === "electrolytic" || properties?.["type"] === "tantalum";
-  const model   = properties?.["model"] ?? "";
-
-  switch (type) {
-    case "Resistor":         return <ResistorSVG />;
-    case "LED":              return <LEDSVG color={properties?.["color"] ?? model} />;
-    case "Diode":            return <DiodeSVG />;
-    case "ZenerDiode":       return <DiodeSVG variant="zener" />;
-    case "SchottkyDiode":    return <DiodeSVG variant="schottky" />;
-    case "TVSDiode":         return <DiodeSVG variant="tvs" />;
-    case "InfraredEmitter":  return <IREmitterSVG />;
-    case "InfraredDetector": return <IRDetectorSVG />;
-    case "Capacitor":        return <CapSVG polar={isPolar} />;
-    case "Inductor":         return <InductorSVG />;
-    case "NPN":
-    case "Transistor":       return <NPNSVG />;
-    case "PNP":              return <PNPSVG />;
-    case "NMOSFET":          return <MOSFETSVG n />;
-    case "PMOSFET":          return <MOSFETSVG n={false} />;
-    case "Buzzer":           return <BuzzerSVG />;
-    case "Crystal":          return <CrystalSVG />;
-    case "Button":
-    case "Switch":           return <SwitchSVG />;
-    case "Motor":            return <MotorSVG />;
-    case "Relay":            return <RelaySVG />;
-    default:                 return <ICSVG pins={pins} label={type} />;
-  }
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// POWER / GND / NET-LABEL SYMBOLS
-// ──────────────────────────────────────────────────────────────────────────────
-function VCCSymbolSVG({ voltage, name }: { voltage?: number; name: string }) {
+// ─────────────────────────────────────────────────────────────────────────────
+// POWER / GND / NET LABEL STAMPS
+// ─────────────────────────────────────────────────────────────────────────────
+function VCCStamp({ voltage, name }: { voltage?: number; name: string }) {
   const label = voltage ? `${voltage}V` : name;
   return (
     <g>
@@ -583,19 +302,19 @@ function VCCSymbolSVG({ voltage, name }: { voltage?: number; name: string }) {
   );
 }
 
-function GNDSymbolSVG({ name }: { name: string }) {
+function GNDStamp({ name }: { name: string }) {
   return (
     <g>
-      <line x1="0" y1="0" x2="0" y2="12" stroke={C.wireGnd} strokeWidth="1.5" />
-      <line x1="-16" y1="12" x2="16" y2="12" stroke={C.wireGnd} strokeWidth="1.5" />
-      <line x1="-10" y1="18" x2="10" y2="18" stroke={C.wireGnd} strokeWidth="1.5" />
-      <line x1="-4"  y1="24" x2="4"  y2="24" stroke={C.wireGnd} strokeWidth="1.5" />
+      <line x1="0" y1="0"   x2="0"   y2="12"  stroke={C.wireGnd} strokeWidth="1.5" />
+      <line x1="-16" y1="12" x2="16" y2="12"  stroke={C.wireGnd} strokeWidth="1.5" />
+      <line x1="-10" y1="18" x2="10" y2="18"  stroke={C.wireGnd} strokeWidth="1.5" />
+      <line x1="-4"  y1="24" x2="4"  y2="24"  stroke={C.wireGnd} strokeWidth="1.5" />
       <text x="0" y="36" textAnchor="middle" fontSize="8" fill={C.wireGnd} fontFamily={FONT}>{name}</text>
     </g>
   );
 }
 
-function NetLabelSVG({ name, netType }: { name: string; netType: string }) {
+function NetLabelStamp({ name, netType }: { name: string; netType: string }) {
   const col = wireColor(netType);
   return (
     <g>
@@ -606,9 +325,68 @@ function NetLabelSVG({ name, netType }: { name: string; netType: string }) {
   );
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
-// FORCE-DIRECTED LAYOUT  (minimum 100px spacing, 20px grid snap)
-// ──────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// PIN LABELS WITH ANTI-COLLISION
+// ─────────────────────────────────────────────────────────────────────────────
+function PinLabels({
+  symbolId, sym, pinNames, allWireSegs, cx, cy,
+}: {
+  symbolId:    string;
+  sym:         SymbolDef | undefined;
+  pinNames:    string[];
+  allWireSegs: Seg[];
+  cx:          number;
+  cy:          number;
+}) {
+  if (symbolId === "IC") return null;
+  const LABEL_OFF = 15;
+
+  return (
+    <>
+      {pinNames.map((pinName) => {
+        const anchor = resolveAnchor(symbolId, sym, pinName, pinNames);
+        const dir    = resolveDir(sym, pinName, pinNames);
+
+        let tx = anchor.x, ty = anchor.y;
+        let ta: "start" | "middle" | "end" = "middle";
+
+        const setDefault = () => {
+          if (dir === "left")       { tx = anchor.x - LABEL_OFF; ty = anchor.y - 4; ta = "end";    }
+          else if (dir === "right") { tx = anchor.x + LABEL_OFF; ty = anchor.y - 4; ta = "start";  }
+          else if (dir === "up")    { tx = anchor.x;             ty = anchor.y - LABEL_OFF; ta = "middle"; }
+          else                      { tx = anchor.x;             ty = anchor.y + LABEL_OFF + 4; ta = "middle"; }
+        };
+        const setOpposite = () => {
+          if (dir === "left")       { tx = anchor.x + LABEL_OFF; ty = anchor.y - 4; ta = "start";  }
+          else if (dir === "right") { tx = anchor.x - LABEL_OFF; ty = anchor.y - 4; ta = "end";    }
+          else if (dir === "up")    { tx = anchor.x;             ty = anchor.y + LABEL_OFF + 4; ta = "middle"; }
+          else                      { tx = anchor.x;             ty = anchor.y - LABEL_OFF; ta = "middle"; }
+        };
+
+        setDefault();
+        if (allWireSegs.some((s) => ptNearSeg(cx + tx, cy + ty, s))) setOpposite();
+
+        return (
+          <text
+            key={pinName}
+            x={tx} y={ty}
+            textAnchor={ta}
+            fontSize="8"
+            fill={C.labelPin}
+            fontFamily={FONT}
+            style={{ pointerEvents: "none" }}
+          >
+            {pinName}
+          </text>
+        );
+      })}
+    </>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FORCE-DIRECTED LAYOUT
+// ─────────────────────────────────────────────────────────────────────────────
 const CELL_W = 240;
 const CELL_H = 260;
 const MARGIN = 160;
@@ -617,12 +395,14 @@ interface PlacedComp {
   id:          string;
   type:        string;
   category:    string;
+  symbolId:    string;
+  sym:         SymbolDef | undefined;
+  hw:          number;
+  hh:          number;
   pins:        Array<{ name: string; direction: string; type: string; pinNumber?: number }>;
   properties?: Record<string, string>;
   x:           number;
   y:           number;
-  col:         number;
-  row:         number;
 }
 
 function buildLayout(netlist: Netlist): PlacedComp[] {
@@ -641,24 +421,26 @@ function buildLayout(netlist: Netlist): PlacedComp[] {
 
   const connSet = new Set<string>();
   netlist.connections.forEach((conn) => {
-    if (!netlist.nets.find((nn) => nn.name === conn.from) &&
-        !netlist.nets.find((nn) => nn.name === conn.to)) {
+    const fromIsNet = !!netlist.nets.find((nn) => nn.name === conn.from);
+    const toIsNet   = !!netlist.nets.find((nn) => nn.name === conn.to);
+    if (!fromIsNet && !toIsNet) {
       connSet.add(`${conn.from}--${conn.to}`);
       connSet.add(`${conn.to}--${conn.from}`);
     }
   });
 
   const scored = netlist.components.map((comp) => {
+    const reg   = getRegistryEntry(comp.type);
     const nets  = compNets.get(comp.id) ?? new Set();
     let score   = 0;
     if ([...nets].some((nn) => powerNets.has(nn))) score -= 20;
     if ([...nets].some((nn) => gndNets.has(nn)))   score += 20;
-    if (comp.category === "passive")          score += 0;
-    if (comp.category === "active_discrete")  score += 5;
-    if (comp.category === "active_ic")        score += 10;
-    if (comp.category === "module")           score += 15;
-    if (comp.category === "sensor")           score += 12;
-    return { comp, score };
+    if (reg.category === "passive")    score += 0;
+    if (reg.category === "transistor") score += 5;
+    if (reg.category === "active_ic")  score += 10;
+    if (reg.category === "module")     score += 15;
+    if (reg.category === "sensor")     score += 12;
+    return { comp, reg, score };
   });
   scored.sort((a, b) => a.score - b.score);
 
@@ -668,8 +450,7 @@ function buildLayout(netlist: Netlist): PlacedComp[] {
     id: comp.id,
     x:  MARGIN + (idx % cols) * CELL_W,
     y:  MARGIN + Math.floor(idx / cols) * CELL_H,
-    vx: 0,
-    vy: 0,
+    vx: 0, vy: 0,
   }));
 
   const REPULSION  = 18000;
@@ -679,7 +460,7 @@ function buildLayout(netlist: Netlist): PlacedComp[] {
   const MIN_DIST   = MIN_SPACING + 80;
 
   for (let iter = 0; iter < ITERATIONS; iter++) {
-    const cool  = 1 - iter / (ITERATIONS * 1.5);
+    const cool   = 1 - iter / (ITERATIONS * 1.5);
     const forces = positions.map(() => ({ fx: 0, fy: 0 }));
 
     for (let i = 0; i < positions.length; i++) {
@@ -688,30 +469,21 @@ function buildLayout(netlist: Netlist): PlacedComp[] {
         const dy = positions[i].y - positions[j].y;
         const d2 = dx * dx + dy * dy + 1;
         const d  = Math.sqrt(d2);
-
         const rep = (REPULSION / d2) * cool;
-        const rx  = (rep * dx) / d;
-        const ry  = (rep * dy) / d;
-        forces[i].fx += rx;
-        forces[i].fy += ry;
-        forces[j].fx -= rx;
-        forces[j].fy -= ry;
+        const rx = (rep * dx) / d, ry = (rep * dy) / d;
+        forces[i].fx += rx; forces[i].fy += ry;
+        forces[j].fx -= rx; forces[j].fy -= ry;
 
         if (d < MIN_DIST) {
           const push = ((MIN_DIST - d) / MIN_DIST) * 6 * cool;
-          forces[i].fx += (dx / d) * push;
-          forces[i].fy += (dy / d) * push;
-          forces[j].fx -= (dx / d) * push;
-          forces[j].fy -= (dy / d) * push;
+          forces[i].fx += (dx / d) * push; forces[i].fy += (dy / d) * push;
+          forces[j].fx -= (dx / d) * push; forces[j].fy -= (dy / d) * push;
         }
 
-        const id_i = positions[i].id, id_j = positions[j].id;
-        if (connSet.has(`${id_i}--${id_j}`)) {
-          const att  = ATTRACTION * d * cool;
-          forces[i].fx -= (dx / d) * att;
-          forces[i].fy -= (dy / d) * att;
-          forces[j].fx += (dx / d) * att;
-          forces[j].fy += (dy / d) * att;
+        if (connSet.has(`${positions[i].id}--${positions[j].id}`)) {
+          const att = ATTRACTION * d * cool;
+          forces[i].fx -= (dx / d) * att; forces[i].fy -= (dy / d) * att;
+          forces[j].fx += (dx / d) * att; forces[j].fy += (dy / d) * att;
         }
       }
     }
@@ -725,96 +497,25 @@ function buildLayout(netlist: Netlist): PlacedComp[] {
   }
 
   const posMap = new Map(positions.map((p) => [p.id, p]));
-  return scored.map(({ comp }, idx) => {
+  return scored.map(({ comp, reg }) => {
     const p  = posMap.get(comp.id)!;
-    const sx = Math.round(p.x / SNAP) * SNAP;
-    const sy = Math.round(p.y / SNAP) * SNAP;
+    const sym = getSymbol(reg.symbolId);
     return {
       ...comp,
-      x:   sx,
-      y:   sy,
-      col: idx % cols,
-      row: Math.floor(idx / cols),
+      symbolId: reg.symbolId,
+      sym,
+      hw: reg.hw,
+      hh: reg.hh,
+      x:  Math.round(p.x / SNAP) * SNAP,
+      y:  Math.round(p.y / SNAP) * SNAP,
     };
   });
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
-// PIN LABELS WITH ANTI-COLLISION (8pt, flips side if wire overlaps)
-// ──────────────────────────────────────────────────────────────────────────────
-function PinLabels({
-  compType,
-  pins,
-  allWireSegs,
-  cx,
-  cy,
-}: {
-  compType:    string;
-  pins:        Array<{ name: string; pinNumber?: number }>;
-  allWireSegs: Array<{ x1: number; y1: number; x2: number; y2: number }>;
-  cx:          number;
-  cy:          number;
-}) {
-  const noExternalLabels = !PIN_ANCHORS[compType];
-  if (noExternalLabels) return null;
-
-  const LABEL_OFF = 15;
-
-  return (
-    <>
-      {pins.map((pin) => {
-        const anchor = resolveAnchor(compType, pin.name, pins.map((p) => p.name));
-        const dir    = pinDir(anchor);
-
-        let tx = anchor.x, ty = anchor.y;
-        let anchor2: "start" | "middle" | "end" = "middle";
-
-        const defaultPos = () => {
-          if (dir === "left")  { tx = anchor.x - LABEL_OFF; ty = anchor.y - 4; anchor2 = "end"; }
-          else if (dir === "right") { tx = anchor.x + LABEL_OFF; ty = anchor.y - 4; anchor2 = "start"; }
-          else if (dir === "up")    { tx = anchor.x; ty = anchor.y - LABEL_OFF; anchor2 = "middle"; }
-          else                      { tx = anchor.x; ty = anchor.y + LABEL_OFF + 4; anchor2 = "middle"; }
-        };
-
-        const oppositePos = () => {
-          if (dir === "left")  { tx = anchor.x + LABEL_OFF; ty = anchor.y - 4; anchor2 = "start"; }
-          else if (dir === "right") { tx = anchor.x - LABEL_OFF; ty = anchor.y - 4; anchor2 = "end"; }
-          else if (dir === "up")    { tx = anchor.x; ty = anchor.y + LABEL_OFF + 4; anchor2 = "middle"; }
-          else                      { tx = anchor.x; ty = anchor.y - LABEL_OFF; anchor2 = "middle"; }
-        };
-
-        defaultPos();
-
-        const worldTx = cx + tx;
-        const worldTy = cy + ty;
-        const hits = allWireSegs.some((seg) => ptOnSegment(worldTx, worldTy, seg));
-        if (hits) oppositePos();
-
-        return (
-          <g key={pin.name}>
-            <text
-              x={tx} y={ty}
-              textAnchor={anchor2}
-              fontSize="8"
-              fill={C.labelPin}
-              fontFamily={FONT}
-              style={{ pointerEvents: "none" }}
-            >
-              {pin.name}
-            </text>
-          </g>
-        );
-      })}
-    </>
-  );
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 // MAIN RENDERER
-// ──────────────────────────────────────────────────────────────────────────────
-interface Props {
-  netlist: Netlist;
-}
+// ─────────────────────────────────────────────────────────────────────────────
+interface Props { netlist: Netlist; }
 
 export function SchematicRenderer({ netlist }: Props) {
   const [zoom,       setZoom]       = useState(1);
@@ -823,112 +524,86 @@ export function SchematicRenderer({ netlist }: Props) {
   const [showGrid,   setShowGrid]   = useState(true);
   const [hoveredNet, setHoveredNet] = useState<string | null>(null);
 
-  const isDragging = useRef(false);
-  const lastPt     = useRef<Pt>({ x: 0, y: 0 });
-  const svgRef     = useRef<SVGSVGElement>(null);
+  const isDragging   = useRef(false);
+  const lastPt       = useRef<Pt>({ x: 0, y: 0 });
+  const svgRef       = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const placed = useMemo(() => buildLayout(netlist), [netlist]);
 
-  // Auto-center
+  // Auto-centre on new layout
   useEffect(() => {
-    if (placed.length === 0) return;
-    const xs  = placed.map((c) => c.x);
-    const ys  = placed.map((c) => c.y);
-    const minX = Math.min(...xs) - MARGIN;
-    const minY = Math.min(...ys) - MARGIN;
-    const maxX = Math.max(...xs) + MARGIN;
-    const maxY = Math.max(...ys) + MARGIN;
-    const bbW  = maxX - minX;
-    const bbH  = maxY - minY;
-    const cW   = containerRef.current?.clientWidth  ?? 800;
-    const cH   = containerRef.current?.clientHeight ?? 600;
-    const newZoom = Math.min(1.4, Math.max(0.25, Math.min(cW / bbW, cH / bbH) * 0.82));
-    setZoom(newZoom);
-    setPan({
-      x: cW / 2 - ((minX + maxX) / 2) * newZoom,
-      y: cH / 2 - ((minY + maxY) / 2) * newZoom,
-    });
+    if (!placed.length) return;
+    const xs = placed.map((c) => c.x), ys = placed.map((c) => c.y);
+    const minX = Math.min(...xs) - MARGIN, minY = Math.min(...ys) - MARGIN;
+    const maxX = Math.max(...xs) + MARGIN, maxY = Math.max(...ys) + MARGIN;
+    const cW = containerRef.current?.clientWidth ?? 800;
+    const cH = containerRef.current?.clientHeight ?? 600;
+    const fz = Math.min(1.4, Math.max(0.25, Math.min(cW / (maxX - minX), cH / (maxY - minY)) * 0.82));
+    setZoom(fz);
+    setPan({ x: cW / 2 - ((minX + maxX) / 2) * fz, y: cH / 2 - ((minY + maxY) / 2) * fz });
   }, [placed]);
 
-  const compById = useMemo(() => {
-    const m = new Map<string, PlacedComp>();
-    placed.forEach((c) => m.set(c.id, c));
-    return m;
-  }, [placed]);
-
+  const compById  = useMemo(() => new Map(placed.map((c) => [c.id, c])), [placed]);
   const netByName = useMemo(() => {
     const m = new Map<string, (typeof netlist.nets)[number]>();
     netlist.nets.forEach((nn) => m.set(nn.name, nn));
     return m;
   }, [netlist.nets]);
 
-  const obstacles = useMemo((): Rect[] => {
-    return placed.map((comp) => {
-      const { hw, hh } = compBounds(comp.type, comp.pins.map((p) => p.name));
+  // Obstacle rects used for wire routing (exclude from/to component)
+  const allObstacles = useMemo((): Rect[] =>
+    placed.map((c) => {
       const pad = 20;
-      return { x: comp.x - hw - pad, y: comp.y - hh - pad, w: (hw + pad) * 2, h: (hh + pad) * 2 };
-    });
-  }, [placed]);
+      return { x: c.x - c.hw - pad, y: c.y - c.hh - pad, w: (c.hw + pad) * 2, h: (c.hh + pad) * 2 };
+    }),
+  [placed]);
 
-  const pinWorld = useCallback(
-    (compId: string, pinName: string): Pt | null => {
-      const comp = compById.get(compId);
-      if (!comp) return null;
-      const local = resolveAnchor(comp.type, pinName, comp.pins.map((p) => p.name));
-      return { x: snapPt(comp.x + local.x), y: snapPt(comp.y + local.y) };
-    },
-    [compById],
-  );
+  // Resolve a pin's world position by reading from symbol anchor table
+  const pinWorld = useCallback((compId: string, pinName: string): Pt | null => {
+    const comp = compById.get(compId);
+    if (!comp) return null;
+    const local = resolveAnchor(comp.symbolId, comp.sym, pinName, comp.pins.map((p) => p.name));
+    return { x: snapN(comp.x + local.x), y: snapN(comp.y + local.y) };
+  }, [compById]);
 
-  const pinWorldDir = useCallback(
-    (compId: string, pinName: string): Dir => {
-      const comp = compById.get(compId);
-      if (!comp) return "right";
-      const local = resolveAnchor(comp.type, pinName, comp.pins.map((p) => p.name));
-      return pinDir(local);
-    },
-    [compById],
-  );
+  const pinDir2 = useCallback((compId: string, pinName: string): Dir => {
+    const comp = compById.get(compId);
+    if (!comp) return "right";
+    return resolveDir(comp.sym, pinName, comp.pins.map((p) => p.name));
+  }, [compById]);
 
-  const maxX = Math.max(800, ...placed.map((p) => p.x)) + MARGIN * 2;
-  const maxY = Math.max(600, ...placed.map((p) => p.y)) + MARGIN * 2;
+  // Canvas size
+  const maxX = Math.max(800, ...placed.map((c) => c.x)) + MARGIN * 2;
+  const maxY = Math.max(600, ...placed.map((c) => c.y)) + MARGIN * 2;
 
   // Interaction
-  const onWheel = useCallback((e: React.WheelEvent) => {
+  const onWheel     = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
     setZoom((z) => Math.max(0.15, Math.min(5, z - e.deltaY * 0.001)));
   }, []);
   const onMouseDown = useCallback((e: React.MouseEvent) => {
-    if ((e.target as SVGElement).closest(".schematic-component")) return;
+    if ((e.target as SVGElement).closest(".sc-comp")) return;
     isDragging.current = true;
     lastPt.current = { x: e.clientX, y: e.clientY };
   }, []);
   const onMouseMove = useCallback((e: React.MouseEvent) => {
     if (!isDragging.current) return;
-    const dx = e.clientX - lastPt.current.x;
-    const dy = e.clientY - lastPt.current.y;
-    setPan((p) => ({ x: p.x + dx, y: p.y + dy }));
+    setPan((p) => ({ x: p.x + e.clientX - lastPt.current.x, y: p.y + e.clientY - lastPt.current.y }));
     lastPt.current = { x: e.clientX, y: e.clientY };
   }, []);
-  const onMouseUp   = useCallback(() => { isDragging.current = false; }, []);
+  const onMouseUp = useCallback(() => { isDragging.current = false; }, []);
 
   const fitToScreen = useCallback(() => {
-    if (placed.length === 0) { setZoom(1); setPan({ x: 0, y: 0 }); return; }
-    const xs  = placed.map((c) => c.x);
-    const ys  = placed.map((c) => c.y);
-    const minX = Math.min(...xs) - MARGIN;
-    const minY = Math.min(...ys) - MARGIN;
-    const maxXv = Math.max(...xs) + MARGIN;
-    const maxYv = Math.max(...ys) + MARGIN;
-    const cW = containerRef.current?.clientWidth  ?? 800;
+    if (!placed.length) { setZoom(1); setPan({ x: 0, y: 0 }); return; }
+    const xs = placed.map((c) => c.x), ys = placed.map((c) => c.y);
+    const minX = Math.min(...xs) - MARGIN, minY = Math.min(...ys) - MARGIN;
+    const maxXv = Math.max(...xs) + MARGIN, maxYv = Math.max(...ys) + MARGIN;
+    const cW = containerRef.current?.clientWidth ?? 800;
     const cH = containerRef.current?.clientHeight ?? 600;
     const fz = Math.min(1.4, Math.max(0.15, Math.min(cW / (maxXv - minX), cH / (maxYv - minY)) * 0.85));
     setZoom(fz);
-    setPan({
-      x: cW / 2 - ((minX + maxXv) / 2) * fz,
-      y: cH / 2 - ((minY + maxYv) / 2) * fz,
-    });
+    setPan({ x: cW / 2 - ((minX + maxXv) / 2) * fz, y: cH / 2 - ((minY + maxYv) / 2) * fz });
   }, [placed]);
 
   const exportSVG = useCallback(() => {
@@ -937,20 +612,14 @@ export function SchematicRenderer({ netlist }: Props) {
     clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
     clone.removeAttribute("style");
     clone.setAttribute("viewBox", `0 0 ${maxX} ${maxY}`);
-
     const style = document.createElementNS("http://www.w3.org/2000/svg", "style");
-    style.textContent = `
-      text { font-family: 'Courier New', monospace; }
-      .schematic-component { cursor: default; }
-    `;
+    style.textContent = `text { font-family: 'Courier New', monospace; } .sc-comp { cursor: default; }`;
     clone.insertBefore(style, clone.firstChild);
-
     const bg = document.createElementNS("http://www.w3.org/2000/svg", "rect");
     bg.setAttribute("x", "0"); bg.setAttribute("y", "0");
     bg.setAttribute("width", String(maxX)); bg.setAttribute("height", String(maxY));
     bg.setAttribute("fill", C.bg);
     clone.insertBefore(bg, clone.firstChild);
-
     const str  = new XMLSerializer().serializeToString(clone);
     const blob = new Blob([str], { type: "image/svg+xml" });
     const url  = URL.createObjectURL(blob);
@@ -959,27 +628,20 @@ export function SchematicRenderer({ netlist }: Props) {
     URL.revokeObjectURL(url);
   }, [maxX, maxY]);
 
-  // ── Build wire / power / junction data ──────────────────────────────────────
-  interface WireEntry {
-    path:    string;
-    color:   string;
-    netName: string;
-    netType: string;
-    segs:    Array<{ x1: number; y1: number; x2: number; y2: number }>;
-  }
-  interface PowerEntry   { x: number; y: number; type: "vcc" | "gnd"; netName: string; voltage?: number; }
+  // ── Build wire / power / junction data ────────────────────────────────────
+  interface WireEntry { path: string; color: string; netName: string; netType: string; segs: Seg[]; }
+  interface PowerEntry { x: number; y: number; kind: "vcc" | "gnd"; netName: string; voltage?: number; }
   interface NetLabelEntry { x: number; y: number; netName: string; netType: string; }
 
-  const wires:           WireEntry[]     = [];
-  const powerSymbols:    PowerEntry[]    = [];
-  const netLabelSymbols: NetLabelEntry[] = [];
+  const wires:      WireEntry[]     = [];
+  const pwrSyms:    PowerEntry[]    = [];
+  const netLabels:  NetLabelEntry[] = [];
+  const ptCount     = new Map<string, { x: number; y: number; color: string; count: number }>();
 
-  const pointCount = new Map<string, { x: number; y: number; color: string; count: number }>();
   function trackPt(x: number, y: number, color: string) {
     const key = `${Math.round(x)},${Math.round(y)}`;
-    const ex  = pointCount.get(key);
-    if (ex) { ex.count += 1; ex.color = color; }
-    else      pointCount.set(key, { x, y, color, count: 1 });
+    const ex  = ptCount.get(key);
+    if (ex) { ex.count++; ex.color = color; } else ptCount.set(key, { x, y, color, count: 1 });
   }
 
   for (const conn of netlist.connections) {
@@ -987,56 +649,44 @@ export function SchematicRenderer({ netlist }: Props) {
     const toNet   = netByName.get(conn.to);
 
     if (fromNet && !toNet) {
-      const pinPos = pinWorld(conn.to, conn.toPin);
-      if (!pinPos) continue;
-      if (fromNet.type === "power")
-        powerSymbols.push({ ...pinPos, type: "vcc", netName: fromNet.name, voltage: fromNet.voltage });
-      else if (fromNet.type === "ground")
-        powerSymbols.push({ ...pinPos, type: "gnd", netName: fromNet.name });
-      else
-        netLabelSymbols.push({ ...pinPos, netName: fromNet.name, netType: fromNet.type });
+      const pos = pinWorld(conn.to, conn.toPin);
+      if (!pos) continue;
+      if (fromNet.type === "power")  pwrSyms.push({ ...pos, kind: "vcc", netName: fromNet.name, voltage: fromNet.voltage });
+      else if (fromNet.type === "ground") pwrSyms.push({ ...pos, kind: "gnd", netName: fromNet.name });
+      else netLabels.push({ ...pos, netName: fromNet.name, netType: fromNet.type });
     } else if (!fromNet && toNet) {
-      const pinPos = pinWorld(conn.from, conn.fromPin);
-      if (!pinPos) continue;
-      if (toNet.type === "power")
-        powerSymbols.push({ ...pinPos, type: "vcc", netName: toNet.name, voltage: toNet.voltage });
-      else if (toNet.type === "ground")
-        powerSymbols.push({ ...pinPos, type: "gnd", netName: toNet.name });
-      else
-        netLabelSymbols.push({ ...pinPos, netName: toNet.name, netType: toNet.type });
+      const pos = pinWorld(conn.from, conn.fromPin);
+      if (!pos) continue;
+      if (toNet.type === "power")    pwrSyms.push({ ...pos, kind: "vcc", netName: toNet.name, voltage: toNet.voltage });
+      else if (toNet.type === "ground") pwrSyms.push({ ...pos, kind: "gnd", netName: toNet.name });
+      else netLabels.push({ ...pos, netName: toNet.name, netType: toNet.type });
     } else if (!fromNet && !toNet) {
-      const fromPos = pinWorld(conn.from, conn.fromPin);
-      const toPos   = pinWorld(conn.to,   conn.toPin);
-      if (!fromPos || !toPos) continue;
-
+      const fpos = pinWorld(conn.from, conn.fromPin);
+      const tpos = pinWorld(conn.to,   conn.toPin);
+      if (!fpos || !tpos) continue;
       const net     = netByName.get(conn.net ?? "");
       const netType = net?.type ?? "signal";
       const color   = wireColor(netType);
-      const fd      = pinWorldDir(conn.from, conn.fromPin);
-      const td      = pinWorldDir(conn.to,   conn.toPin);
-
-      const obsForRoute = obstacles.filter((_, idx) => {
-        const comp = placed[idx];
-        return comp.id !== conn.from && comp.id !== conn.to;
-      });
-
-      const path = routeWireObstacle(fromPos, fd, toPos, td, obsForRoute);
-      const segs = extractSegments(path);
-
+      const fd      = pinDir2(conn.from, conn.fromPin);
+      const td      = pinDir2(conn.to,   conn.toPin);
+      const obs     = allObstacles.filter((_, idx) => placed[idx].id !== conn.from && placed[idx].id !== conn.to);
+      const path    = routeWire(fpos, fd, tpos, td, obs);
+      const segs    = extractSegments(path);
       wires.push({ path, color, netName: conn.net ?? "", netType, segs });
-      trackPt(fromPos.x, fromPos.y, color);
-      trackPt(toPos.x,   toPos.y,   color);
+      trackPt(fpos.x, fpos.y, color);
+      trackPt(tpos.x, tpos.y, color);
     }
   }
 
-  const allWireSegs = wires.flatMap((w) => w.segs);
-  const junctions   = [...pointCount.values()].filter((p) => p.count >= 3);
+  const allSegs  = wires.flatMap((w) => w.segs);
+  const junctions = [...ptCount.values()].filter((p) => p.count >= 3);
 
   const selected      = selectedId ? compById.get(selectedId) : null;
   const selectedConns = selectedId
     ? netlist.connections.filter((c) => c.from === selectedId || c.to === selectedId)
     : [];
 
+  // ── Render ───────────────────────────────────────────────────────────────
   return (
     <div
       ref={containerRef}
@@ -1045,26 +695,20 @@ export function SchematicRenderer({ netlist }: Props) {
     >
       {/* Toolbar */}
       <div className="absolute top-2 left-2 z-20 flex items-center gap-1.5" style={{ pointerEvents: "all" }}>
-        {[
-          { label: "+",              onClick: () => setZoom((z) => Math.min(5, z + 0.25)) },
-          { label: "−",              onClick: () => setZoom((z) => Math.max(0.15, z - 0.25)) },
-          { label: "⊡ Fit",          onClick: fitToScreen },
-          { label: showGrid ? "Grid ●" : "Grid ○", onClick: () => setShowGrid((v) => !v) },
-          { label: "↓ Export SVG",   onClick: exportSVG },
-        ].map(({ label, onClick }) => (
+        {([
+          { label: "+",            act: () => setZoom((z) => Math.min(5, z + 0.25)) },
+          { label: "−",            act: () => setZoom((z) => Math.max(0.15, z - 0.25)) },
+          { label: "⊡ Fit",        act: fitToScreen },
+          { label: showGrid ? "Grid ●" : "Grid ○", act: () => setShowGrid((v) => !v) },
+          { label: "↓ Export SVG", act: exportSVG },
+        ] as const).map(({ label, act }) => (
           <button
             key={label}
-            onClick={onClick}
+            onClick={act}
             style={{
-              background:   "#1F2937",
-              border:       "1px solid #374151",
-              color:        "#E5E7EB",
-              borderRadius: "4px",
-              padding:      "3px 9px",
-              fontSize:     "10px",
-              fontFamily:   FONT,
-              cursor:       "pointer",
-              whiteSpace:   "nowrap",
+              background: "#1F2937", border: "1px solid #374151", color: "#E5E7EB",
+              borderRadius: "4px", padding: "3px 9px", fontSize: "10px",
+              fontFamily: FONT, cursor: "pointer", whiteSpace: "nowrap",
             }}
           >
             {label}
@@ -1078,21 +722,14 @@ export function SchematicRenderer({ netlist }: Props) {
       {/* Selected component panel */}
       {selected && (
         <div
-          className="absolute top-2 right-2 z-20 rounded p-3 text-[10px] font-mono space-y-1.5"
-          style={{
-            background:     "#1F2937EE",
-            border:         "1px solid #374151",
-            maxWidth:       "220px",
-            backdropFilter: "blur(8px)",
-            fontFamily:     FONT,
-            color:          "#E5E7EB",
-          }}
+          className="absolute top-2 right-2 z-20 rounded p-3 text-[10px] space-y-1.5"
+          style={{ background: "#1F2937EE", border: "1px solid #374151", maxWidth: 220, backdropFilter: "blur(8px)", fontFamily: FONT, color: "#E5E7EB" }}
         >
           <div className="flex items-center justify-between gap-2">
             <span style={{ color: C.sel, fontWeight: "bold" }}>{selected.id}</span>
             <button onClick={() => setSelectedId(null)} style={{ color: "#6B7280", fontSize: "9px" }}>✕</button>
           </div>
-          <div style={{ color: "#9CA3AF" }}>{selected.type}</div>
+          <div style={{ color: "#9CA3AF" }}>{selected.type} <span style={{ color: "#6B7280" }}>({selected.symbolId})</span></div>
           {Object.entries(selected.properties ?? {}).map(([k, v]) => (
             <div key={k}><span style={{ color: "#6B7280" }}>{k}:</span> {v}</div>
           ))}
@@ -1112,26 +749,22 @@ export function SchematicRenderer({ netlist }: Props) {
 
       {/* Net hover tooltip */}
       {hoveredNet && (
-        <div
-          className="absolute bottom-12 left-2 z-20 px-2 py-1 rounded"
-          style={{ background: "#1F2937EE", border: "1px solid #374151", color: "#E5E7EB", fontSize: "9px", fontFamily: FONT }}
-        >
+        <div className="absolute bottom-12 left-2 z-20 px-2 py-1 rounded"
+          style={{ background: "#1F2937EE", border: "1px solid #374151", color: "#E5E7EB", fontSize: "9px", fontFamily: FONT }}>
           net: <span style={{ color: C.wire }}>{hoveredNet}</span>
         </div>
       )}
 
       {/* Legend */}
-      <div
-        className="absolute bottom-2 left-2 z-20 flex flex-col gap-1 p-2 rounded"
-        style={{ background: "#1F2937CC", border: "1px solid #374151" }}
-      >
-        {[
+      <div className="absolute bottom-2 left-2 z-20 flex flex-col gap-1 p-2 rounded"
+        style={{ background: "#1F2937CC", border: "1px solid #374151" }}>
+        {([
           { col: C.wirePwr, lbl: "Power" },
           { col: C.wireGnd, lbl: "Ground" },
           { col: C.wire,    lbl: "Signal" },
           { col: C.wirePwm, lbl: "PWM" },
           { col: C.wireAna, lbl: "Analog" },
-        ].map(({ col, lbl }) => (
+        ] as const).map(({ col, lbl }) => (
           <div key={lbl} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "9px", fontFamily: FONT }}>
             <div style={{ width: 18, height: 2, background: col, borderRadius: 1 }} />
             <span style={{ color: "#9CA3AF" }}>{lbl}</span>
@@ -1139,15 +772,12 @@ export function SchematicRenderer({ netlist }: Props) {
         ))}
       </div>
 
-      {/* SVG Canvas */}
+      {/* SVG canvas */}
       <svg
         ref={svgRef}
         className="w-full h-full cursor-grab active:cursor-grabbing"
         viewBox={`0 0 ${maxX} ${maxY}`}
-        style={{
-          transform:       `matrix(${zoom},0,0,${zoom},${pan.x},${pan.y})`,
-          transformOrigin: "0 0",
-        }}
+        style={{ transform: `matrix(${zoom},0,0,${zoom},${pan.x},${pan.y})`, transformOrigin: "0 0" }}
         onWheel={onWheel}
         onMouseDown={onMouseDown}
         onMouseMove={onMouseMove}
@@ -1157,7 +787,7 @@ export function SchematicRenderer({ netlist }: Props) {
         {/* Background */}
         <rect x="0" y="0" width={maxX} height={maxY} fill={C.bg} />
 
-        {/* 20px dot grid */}
+        {/* 20 px dot grid */}
         {showGrid && (
           <g>
             {Array.from({ length: Math.ceil(maxX / GRID) + 1 }, (_, i) =>
@@ -1168,7 +798,7 @@ export function SchematicRenderer({ netlist }: Props) {
           </g>
         )}
 
-        {/* Wires (drawn below components) */}
+        {/* Wires */}
         {wires.map((w, i) => (
           <path
             key={i}
@@ -1184,79 +814,76 @@ export function SchematicRenderer({ netlist }: Props) {
           />
         ))}
 
-        {/* Junction dots – 4px radius solid circles at ≥3-wire intersections */}
+        {/* Junction dots — 4 px radius at ≥3-wire intersections */}
         {junctions.map((j, i) => (
           <circle key={i} cx={j.x} cy={j.y} r="4" fill={j.color} />
         ))}
 
         {/* Power symbols */}
-        {powerSymbols.map((sym, i) => (
-          <g key={i} transform={`translate(${sym.x},${sym.y})`}>
-            {sym.type === "vcc"
-              ? <VCCSymbolSVG voltage={sym.voltage} name={sym.netName} />
-              : <GNDSymbolSVG name={sym.netName} />}
+        {pwrSyms.map((s, i) => (
+          <g key={i} transform={`translate(${s.x},${s.y})`}>
+            {s.kind === "vcc" ? <VCCStamp voltage={s.voltage} name={s.netName} /> : <GNDStamp name={s.netName} />}
           </g>
         ))}
 
         {/* Net labels */}
-        {netLabelSymbols.map((sym, i) => (
-          <g key={i} transform={`translate(${sym.x},${sym.y})`}>
-            <NetLabelSVG name={sym.netName} netType={sym.netType} />
+        {netLabels.map((s, i) => (
+          <g key={i} transform={`translate(${s.x},${s.y})`}>
+            <NetLabelStamp name={s.netName} netType={s.netType} />
           </g>
         ))}
 
-        {/* Components (drawn on top) */}
+        {/* Components — stamped from symbol library */}
         {placed.map((comp) => {
           const isSelected = comp.id === selectedId;
-          const pinNames   = comp.pins.map((p) => p.name);
-          const value      = comp.properties?.["value"]
+          const value = comp.properties?.["value"]
             ?? comp.properties?.["resistance"]
             ?? comp.properties?.["capacitance"]
             ?? comp.properties?.["model"]
             ?? comp.properties?.["color"]
             ?? "";
 
-          const { hw, hh } = compBounds(comp.type, pinNames);
-
           return (
             <g
               key={comp.id}
-              className="schematic-component"
+              className="sc-comp"
               transform={`translate(${comp.x},${comp.y})`}
               onClick={() => setSelectedId(comp.id === selectedId ? null : comp.id)}
               style={{ cursor: "pointer" }}
             >
+              {/* Selection highlight box */}
               {isSelected && (
                 <rect
-                  x={-hw - 8} y={-hh - 8}
-                  width={(hw + 8) * 2} height={(hh + 8) * 2}
-                  rx="5"
-                  fill={C.selFill}
-                  fillOpacity="0.5"
-                  stroke={C.sel}
-                  strokeWidth="1.5"
-                  strokeDasharray="5,3"
+                  x={-comp.hw - 8} y={-comp.hh - 8}
+                  width={(comp.hw + 8) * 2} height={(comp.hh + 8) * 2}
+                  rx="5" fill={C.selFill} fillOpacity="0.5"
+                  stroke={C.sel} strokeWidth="1.5" strokeDasharray="5,3"
                 />
               )}
 
-              <CompSymbol type={comp.type} pins={pinNames} properties={comp.properties} />
+              {/* ── STAMP from symbol library ── */}
+              <StampSymbol
+                symbolId={comp.symbolId}
+                componentType={comp.type}
+                pinNames={comp.pins.map((p) => p.name)}
+                properties={comp.properties}
+              />
 
               {/* Pin labels with anti-collision */}
               <PinLabels
-                compType={comp.type}
-                pins={comp.pins.map((p) => ({ name: p.name, pinNumber: p.pinNumber }))}
-                allWireSegs={allWireSegs}
+                symbolId={comp.symbolId}
+                sym={comp.sym}
+                pinNames={comp.pins.map((p) => p.name)}
+                allWireSegs={allSegs}
                 cx={comp.x}
                 cy={comp.y}
               />
 
-              {/* Ref designator – 15px above component top, bold */}
+              {/* Ref designator — centred above component */}
               <text
-                x={0}
-                y={-hh - 15}
+                x={0} y={-comp.hh - 15}
                 textAnchor="middle"
-                fontSize="10"
-                fontWeight="bold"
+                fontSize="10" fontWeight="bold"
                 fontFamily={FONT}
                 fill={isSelected ? C.sel : C.labelRef}
                 style={{ pointerEvents: "none" }}
@@ -1264,11 +891,10 @@ export function SchematicRenderer({ netlist }: Props) {
                 {comp.id}
               </text>
 
-              {/* Value – 15px below component bottom */}
+              {/* Value — centred below component */}
               {value && (
                 <text
-                  x={0}
-                  y={hh + 24}
+                  x={0} y={comp.hh + 24}
                   textAnchor="middle"
                   fontSize="8.5"
                   fontFamily={FONT}
