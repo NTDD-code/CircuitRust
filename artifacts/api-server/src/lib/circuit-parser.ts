@@ -1,5 +1,5 @@
 export type PinType = "power" | "ground" | "signal" | "analog" | "digital" | "bidirectional" | "passive";
-export type NetType = "power" | "ground" | "signal";
+export type NetType = "power" | "ground" | "signal" | "nc";
 export type PinDirection = "in" | "out" | "passive" | "power" | "ground" | "open_collector" | "bidirectional";
 export type ComponentCategory = "passive" | "active_discrete" | "active_ic" | "sensor" | "module" | "power";
 
@@ -55,6 +55,7 @@ export interface ParsedNet {
   name: string;
   type: NetType;
   voltage?: number;
+  noConnect?: boolean;
 }
 
 export interface ParseResult {
@@ -696,6 +697,21 @@ function parseNetDeclaration(line: string, lineNum: number, errors: ParseError[]
     nets.set(pwmBraceMatch[1], { name: pwmBraceMatch[1], type: "signal" });
     return true;
   }
+
+  // Net::nc()  — no-connect marker; silences W004/W005 on the connected pin
+  const ncMatch = line.match(/^let\s+(\w+)\s*=\s*Net::nc\(\)\s*;?$/i);
+  if (ncMatch) {
+    nets.set(ncMatch[1], { name: ncMatch[1], type: "nc", noConnect: true });
+    return true;
+  }
+
+  // Net::new('NAME') or Net::new("NAME") or Net::new()  — custom named signal net
+  const newMatch = line.match(/^let\s+(\w+)\s*=\s*Net::new\s*\(\s*(?:'[^']*'|"[^"]*")?\s*\)\s*;?$/i);
+  if (newMatch) {
+    nets.set(newMatch[1], { name: newMatch[1], type: "signal" });
+    return true;
+  }
+
   return false;
 }
 
