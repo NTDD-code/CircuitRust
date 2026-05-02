@@ -791,10 +791,23 @@ function parseConnectionMacro(
   lineNum: number,
   errors: ParseError[],
   connections: ParsedConnection[],
+  nets: Map<string, ParsedNet>,
 ): boolean {
   // Support both => (original) and -> (strict DSL)
   const connectMatch = line.match(/^connect!\((.+?)\s*(?:=>|->|→)\s*(.+?)\)\s*;?$/);
   if (!connectMatch) return false;
+
+  // Resolve inline Net::nc() — auto-register an anonymous nc net so users can
+  // write  connect!(comp.pin -> Net::nc())  without a separate let binding.
+  let ncSeq = 0;
+  function resolveInlineNc(side: string): string {
+    if (/^Net::nc\(\)$/i.test(side)) {
+      const varName = `__nc_${lineNum}_${ncSeq++}`;
+      nets.set(varName, { name: varName, type: "nc", noConnect: true });
+      return varName;
+    }
+    return side;
+  }
 
   function parseEndpoint(s: string): { varName: string; pin?: string } | null {
     const dotMatch = s.match(/^(\w+)\.(\w+)$/);
@@ -804,13 +817,16 @@ function parseConnectionMacro(
     return null;
   }
 
-  const from = parseEndpoint(connectMatch[1].trim());
-  const to = parseEndpoint(connectMatch[2].trim());
+  const fromStr = resolveInlineNc(connectMatch[1].trim());
+  const toStr   = resolveInlineNc(connectMatch[2].trim());
+
+  const from = parseEndpoint(fromStr);
+  const to   = parseEndpoint(toStr);
 
   if (!from || !to) {
     errors.push({
       line: lineNum, column: 1,
-      message: `Invalid connect! syntax. Use: connect!(component.pin => component.pin) or connect!(component.pin => net)`,
+      message: `Invalid connect! syntax. Use: connect!(component.pin -> component.pin) or connect!(component.pin -> net)`,
       errorCode: "E003", severity: "error", sourceLine: line,
     });
     return true;
@@ -843,7 +859,7 @@ export function parseCircuit(source: string): ParseResult {
 
     if (parseNetDeclaration(line, lineNum, errors, nets)) continue;
     if (parseComponentDeclaration(line, lineNum, errors, components)) continue;
-    if (parseConnectionMacro(line, lineNum, errors, connections)) continue;
+    if (parseConnectionMacro(line, lineNum, errors, connections, nets)) continue;
 
     errors.push({
       line: lineNum, column: 1,
