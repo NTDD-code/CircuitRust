@@ -276,4 +276,7 @@ export const FIX_LABELS: Record<string, string> = {
   S002: "Insert 220Ω current-limiting resistor",
   S003: "Add level shifter",
   S004: "Insert NPN transistor driver",
+  S005: "Insert 10kΩ base resistor",
+  S006: "Add collector load resistor",
+  S007: "Review BJT drive voltage",
 };

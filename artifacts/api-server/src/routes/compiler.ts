@@ -76,6 +76,26 @@ router.post("/compiler/compile", (req, res) => {
         line: err.line,
       });
     }
+    // E009 — transistor base without current-limiting resistor
+    if (err.errorCode === "E009") {
+      safetyIssues.push({
+        severity: err.severity === "fatal" ? "FATAL" : "CRITICAL",
+        code: "S005",
+        message: "Transistor base will burn! Missing base resistor.",
+        detail: err.message,
+        line: err.line,
+      });
+    }
+    // E010 — NPN collector-emitter short when saturated
+    if (err.errorCode === "E010") {
+      safetyIssues.push({
+        severity: "FATAL",
+        code: "S006",
+        message: "Potential Collector-Emitter short circuit when transistor is saturated!",
+        detail: err.message,
+        line: err.line,
+      });
+    }
   }
 
   for (const warn of validationResult.warnings) {
@@ -85,6 +105,16 @@ router.post("/compiler/compile", (req, res) => {
         severity: "WARNING",
         code: "S003",
         message: "Overvoltage risk! Component may be damaged by excessive voltage.",
+        detail: warn.message,
+        line: warn.line,
+      });
+    }
+    // W007 — transistor pin voltage mismatch (5V BJT in 3.3V logic circuit)
+    if (warn.warningCode === "W007") {
+      safetyIssues.push({
+        severity: "WARNING",
+        code: "S007",
+        message: "Transistor voltage mismatch! 5V net on BJT in a 3.3V logic circuit.",
         detail: warn.message,
         line: warn.line,
       });
@@ -307,6 +337,32 @@ let vcc = Net::power(5.0);
 let gnd = Net::ground();
 
 connect!(vcc => gnd);`,
+  },
+  {
+    name: "Transistor Burn Scenarios",
+    description: "Demonstrates E009 (no base resistor) and E010 (collector-emitter short) transistor safety errors",
+    source: `// DANGER: Three transistor safety violations in one circuit
+let vcc = Net::power(5.0);
+let gnd = Net::ground();
+
+let ard = Component::ArduinoUno;
+let q1  = Component::NPN { model: "2N2222" };
+let q2  = Component::NPN { model: "BC547" };
+
+connect!(vcc => ard.vcc);
+connect!(gnd => ard.gnd);
+
+// E009a — base connected directly to power net (no resistor) → transistor burns
+connect!(vcc => q1.base);
+connect!(q1.collector => gnd);
+connect!(q1.emitter   => gnd);
+
+// E009b — MCU GPIO drives base with no series resistor → GPIO + junction at risk
+connect!(ard.d5 => q2.base);
+
+// E010 — collector wired directly to VCC, emitter to GND, no load → saturation short
+connect!(vcc => q2.collector);
+connect!(q2.emitter => gnd);`,
   },
 ];
 

@@ -385,6 +385,7 @@ export function validateCircuit(
     "ArduinoUno", "ArduinoNano", "ESP32", "ESP8266",
     "RaspberryPiPico", "STM32",
   ]);
+  const BJT_TYPES = new Set(["NPN", "PNP"]);
 
   for (const [loadId, loadComp] of components) {
     if (!HIGH_CURRENT_TYPES.has(loadComp.type)) continue;
@@ -411,6 +412,124 @@ export function validateCircuit(
           });
         }
       }
+    }
+  }
+
+  // ── E009: Transistor base connected without current-limiting resistor ────────
+  // Rule 1a: base wired directly to a power net → transistor burns immediately.
+  // Rule 1b: base wired directly to an MCU GPIO with no resistor in series →
+  //          unlimited base current destroys the GPIO or the junction.
+  for (const [qId, qComp] of components) {
+    if (!BJT_TYPES.has(qComp.type)) continue;
+
+    const baseConns = connections.filter(
+      (c) => (c.to === qId && c.toPin === "base") || (c.from === qId && c.fromPin === "base"),
+    );
+
+    for (const conn of baseConns) {
+      const srcLine  = sourceLines[conn.line - 1] ?? "";
+      const otherId  = conn.from === qId ? conn.to : conn.from;
+      const srcNet   = nets.get(otherId);
+      const srcComp  = components.get(otherId);
+
+      // 1a — power net → base (no resistor possible in a single connection step)
+      if (srcNet && srcNet.type === "power") {
+        errors.push({
+          line: conn.line, column: 1,
+          message: `E009: Transistor '${qId}' (${qComp.type}) base pin is driven directly by power net '${otherId}' (${srcNet.voltage ?? "?"}V). This provides unlimited base current and will instantly destroy the transistor junction. Add a series base resistor (e.g., 10kΩ).`,
+          errorCode: "E009", severity: "fatal", sourceLine: srcLine,
+        });
+        continue;
+      }
+
+      // 1b — MCU GPIO → base without a resistor node between them
+      if (srcComp && MCU_TYPES.has(srcComp.type)) {
+        // A correctly-wired circuit always routes: MCU → resistor → base.
+        // If the base connects directly to the MCU there is no resistor.
+        errors.push({
+          line: conn.line, column: 1,
+          message: `E009: Transistor '${qId}' (${qComp.type}) base is connected directly to MCU '${otherId}' with no base resistor. MCU GPIO pins source ≤40 mA — an unprotected base draws destructive current at saturation. Insert a 10kΩ resistor between the GPIO and the base.`,
+          errorCode: "E009", severity: "error", sourceLine: srcLine,
+        });
+      }
+    }
+  }
+
+  // ── E010: NPN/PNP Collector–Emitter short when transistor saturates ──────────
+  // For NPN: collector wired directly to a power net AND emitter to a ground net
+  // with no load (resistor, LED, relay, etc.) between VCC and the collector.
+  // When the transistor saturates the path becomes near-0Ω → dead short.
+  for (const [qId, qComp] of components) {
+    if (qComp.type !== "NPN") continue; // PNP orientation is reversed; handled via W003
+
+    const collectorConns = connections.filter(
+      (c) => (c.to === qId && c.toPin === "collector") || (c.from === qId && c.fromPin === "collector"),
+    );
+    const emitterConns = connections.filter(
+      (c) => (c.to === qId && c.toPin === "emitter") || (c.from === qId && c.fromPin === "emitter"),
+    );
+
+    const collDirectVccConn = collectorConns.find((c) => {
+      const otherId = c.from === qId ? c.to : c.from;
+      return nets.get(otherId)?.type === "power";
+    });
+    const emitterDirectGnd = emitterConns.some((c) => {
+      const otherId = c.from === qId ? c.to : c.from;
+      return nets.get(otherId)?.type === "ground";
+    });
+
+    if (collDirectVccConn && emitterDirectGnd) {
+      const pwrId   = collDirectVccConn.from === qId ? collDirectVccConn.to : collDirectVccConn.from;
+      const srcLine = sourceLines[collDirectVccConn.line - 1] ?? "";
+      errors.push({
+        line: collDirectVccConn.line, column: 1,
+        message: `E010: Transistor '${qId}' collector is wired directly to power net '${pwrId}' with the emitter at ground and no load in the collector path. When saturated this is a dead short — add a load (resistor, LED, relay coil) between '${pwrId}' and '${qId}.collector'.`,
+        errorCode: "E010", severity: "fatal", sourceLine: srcLine,
+      });
+    }
+  }
+
+  // ── W007: Transistor pin voltage violation — 5V net on a 3.3V-context BJT ───
+  // Detects when a ≥5V power net drives any pin of a transistor that also
+  // connects to a 3.3V logic device, risking damage to the low-voltage part.
+  for (const [qId, qComp] of components) {
+    if (!BJT_TYPES.has(qComp.type)) continue;
+
+    const allQConns = connections.filter((c) => c.from === qId || c.to === qId);
+
+    // Find the first connection that brings a ≥5V power net onto any BJT pin
+    const highVConn = allQConns.find((c) => {
+      const otherId = c.from === qId ? c.to : c.from;
+      const net = nets.get(otherId);
+      return net?.type === "power" && net.voltage !== undefined && net.voltage >= 5.0;
+    });
+    if (!highVConn) continue;
+
+    const highVNetId  = highVConn.from === qId ? highVConn.to : highVConn.from;
+    const highVNet    = nets.get(highVNetId)!;
+    const highVPinName = highVConn.from === qId ? highVConn.fromPin : highVConn.toPin;
+
+    // Check if any other connection on this BJT touches a 3.3V world
+    const lowVConn = allQConns.find((c) => {
+      const otherId = c.from === qId ? c.to : c.from;
+      if (otherId === highVNetId) return false;
+      const net  = nets.get(otherId);
+      if (net?.voltage !== undefined && net.voltage <= 3.3) return true;
+      const comp = components.get(otherId);
+      if (comp?.voltageLevel !== undefined && comp.voltageLevel <= 3.3) return true;
+      return false;
+    });
+
+    if (lowVConn) {
+      const lowId    = lowVConn.from === qId ? lowVConn.to : lowVConn.from;
+      const lowLabel = nets.get(lowId)?.voltage
+        ? `net '${lowId}' (${nets.get(lowId)!.voltage}V)`
+        : `'${lowId}' (${components.get(lowId)?.voltageLevel ?? "?"}V)`;
+      warnings.push({
+        line: highVConn.line, column: 1,
+        message: `W007: Transistor '${qId}' (${qComp.type}) has ${highVNet.voltage}V net '${highVNetId}' on its '${highVPinName}' pin, but the transistor also interfaces with 3.3V logic at ${lowLabel}. Verify the base drive voltage is 3.3V-compatible or add appropriate protection.`,
+        warningCode: "W007",
+      });
     }
   }
 
