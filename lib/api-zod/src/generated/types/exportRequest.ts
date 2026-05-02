@@ -5,9 +5,11 @@
  * Strict Circuit Compiler API
  * OpenAPI spec version: 0.2.0
  */
+import type { ExportRequestFormat } from "./exportRequestFormat";
 import type { Netlist } from "./netlist";
 
-export interface LlmAnalyzeRequest {
-  source: string;
-  netlist?: Netlist;
+export interface ExportRequest {
+  netlist: Netlist;
+  format?: ExportRequestFormat;
+  title?: string;
 }

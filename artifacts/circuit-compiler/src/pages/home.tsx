@@ -1,9 +1,22 @@
 import { useState } from "react";
-import { useCompileCircuit, useAnalyzeCircuitSafety, useGetExamples, getGetExamplesQueryKey, CompileResult, Netlist, LlmAnalyzeResult } from "@workspace/api-client-react";
+import { 
+  useCompileCircuit, 
+  useAnalyzeCircuitSafety, 
+  useGetExamples, 
+  getGetExamplesQueryKey, 
+  CompileResult, 
+  Netlist, 
+  LlmAnalyzeResult,
+  useExportNetlist,
+  useGetComponentLibrary,
+  getGetComponentLibraryQueryKey
+} from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
-import { Play, ShieldAlert, Cpu, Activity, AlertTriangle, ShieldCheck, Loader2, ChevronDown } from "lucide-react";
+import { Play, ShieldAlert, Cpu, Activity, AlertTriangle, ShieldCheck, Loader2, ChevronDown, Download, Layers, Zap, Search, X } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Input } from "@/components/ui/input";
 
 export default function Home() {
   const [source, setSource] = useState(`// Simple LED circuit
@@ -19,10 +32,14 @@ connect!(led1.cathode => gnd);`);
 
   const [compileResult, setCompileResult] = useState<CompileResult | null>(null);
   const [analysisResult, setAnalysisResult] = useState<LlmAnalyzeResult | null>(null);
+  const [librarySearch, setLibrarySearch] = useState("");
 
   const compileMutation = useCompileCircuit();
   const analyzeMutation = useAnalyzeCircuitSafety();
+  const exportMutation = useExportNetlist();
+  
   const { data: examplesData } = useGetExamples({ query: { queryKey: getGetExamplesQueryKey() } });
+  const { data: libraryData } = useGetComponentLibrary({ query: { queryKey: getGetComponentLibraryQueryKey() } });
 
   const handleCompile = () => {
     setCompileResult(null);
@@ -42,6 +59,36 @@ connect!(led1.cathode => gnd);`);
     });
   };
 
+  const handleExport = (format: "kicad" | "proteus" | "spice") => {
+    if (!compileResult?.netlist) return;
+    
+    exportMutation.mutate({ 
+      data: { netlist: compileResult.netlist, format, title: "circuit" } 
+    }, {
+      onSuccess: (result) => {
+        const blob = new Blob([result.content], { type: "text/plain" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = result.filename;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+    });
+  };
+
+  // Group components for the library panel
+  const filteredComponents = libraryData?.components.filter(c => 
+    c.type.toLowerCase().includes(librarySearch.toLowerCase()) || 
+    c.description.toLowerCase().includes(librarySearch.toLowerCase())
+  ) || [];
+
+  const libraryGroups = filteredComponents.reduce((acc, comp) => {
+    if (!acc[comp.category]) acc[comp.category] = [];
+    acc[comp.category].push(comp);
+    return acc;
+  }, {} as Record<string, typeof filteredComponents>);
+
   return (
     <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden font-sans">
       {/* Header */}
@@ -54,6 +101,81 @@ connect!(led1.cathode => gnd);`);
         </div>
         
         <div className="flex items-center gap-3">
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button variant="outline" size="sm" className="font-mono text-xs border-border/50 hover:bg-accent">
+                <Layers className="w-4 h-4 mr-2 opacity-70" />
+                Library
+              </Button>
+            </SheetTrigger>
+            <SheetContent className="w-[400px] sm:w-[540px] flex flex-col h-full bg-card border-l border-border/40 p-0">
+              <SheetHeader className="px-6 py-4 border-b border-border/40">
+                <SheetTitle className="font-mono text-sm uppercase tracking-wider flex items-center gap-2">
+                  <Layers className="w-4 h-4 text-primary" />
+                  Component Library
+                </SheetTitle>
+              </SheetHeader>
+              <div className="p-4 border-b border-border/40">
+                <div className="relative">
+                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <Input 
+                    placeholder="Search components..." 
+                    value={librarySearch}
+                    onChange={e => setLibrarySearch(e.target.value)}
+                    className="pl-9 font-mono text-xs h-9 bg-background/50"
+                  />
+                  {librarySearch && (
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+                      onClick={() => setLibrarySearch("")}
+                    >
+                      <X className="w-3 h-3 text-muted-foreground" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+              <div className="flex-1 overflow-auto p-4 font-mono text-xs">
+                {Object.entries(libraryGroups).length === 0 ? (
+                  <div className="text-center text-muted-foreground py-8 italic">No components found.</div>
+                ) : (
+                  <div className="space-y-6">
+                    {Object.entries(libraryGroups).map(([category, comps]) => (
+                      <div key={category}>
+                        <h3 className="uppercase tracking-widest text-[10px] text-muted-foreground mb-3 font-semibold border-b border-border/40 pb-1">{category}</h3>
+                        <div className="space-y-3">
+                          {comps.map(comp => (
+                            <div key={comp.type} className="bg-background/50 rounded-md p-3 border border-border/40 hover:border-primary/30 transition-colors">
+                              <div className="flex items-center justify-between mb-1.5">
+                                <span className="font-bold text-primary/90">{comp.type}</span>
+                                {comp.voltageLevel && (
+                                  <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-primary/20 bg-primary/5 text-primary/80">
+                                    {comp.voltageLevel}V
+                                  </Badge>
+                                )}
+                              </div>
+                              <p className="text-muted-foreground mb-2 leading-relaxed">{comp.description}</p>
+                              <div className="flex flex-wrap gap-1.5">
+                                {comp.pins.map(pin => (
+                                  <span key={pin.name} className="px-1.5 py-0.5 rounded bg-muted/50 text-[10px] text-muted-foreground border border-border/50" title={`Direction: ${pin.direction}\nType: ${pin.type}`}>
+                                    {pin.name}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </SheetContent>
+          </Sheet>
+
+          <div className="w-px h-5 bg-border/50 mx-1"></div>
+
           {examplesData?.examples && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -74,6 +196,31 @@ connect!(led1.cathode => gnd);`);
             </DropdownMenu>
           )}
           
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="font-mono text-xs border-border/50 hover:bg-accent"
+                disabled={!compileResult?.success || exportMutation.isPending}
+              >
+                {exportMutation.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2 opacity-70" />}
+                EXPORT .NET <ChevronDown className="w-4 h-4 ml-2 opacity-50" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-40 font-mono text-xs bg-card border-border">
+              <DropdownMenuItem onClick={() => handleExport("kicad")} className="cursor-pointer">
+                KiCad (.net)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleExport("proteus")} className="cursor-pointer">
+                Proteus (.sdf)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleExport("spice")} className="cursor-pointer">
+                SPICE (.sp)
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           <Button 
             onClick={handleCompile} 
             disabled={compileMutation.isPending}
@@ -160,16 +307,23 @@ connect!(led1.cathode => gnd);`);
                     </div>
                   ))}
 
-                  {compileResult.warnings?.map((warn, i) => (
-                    <div key={i} className="text-amber-500/90 pl-2 border-l-2 border-amber-500/50">
-                      <div className="font-bold mb-1">
-                        warning[{warn.warningCode}]: {warn.message}
+                  {compileResult.warnings?.map((warn, i) => {
+                    const isW003 = warn.warningCode === 'W003';
+                    return (
+                      <div key={i} className={`pl-3 py-1.5 border-l-2 bg-background/30 rounded-r-sm ${isW003 ? 'border-orange-500/70 text-orange-400/90' : 'border-amber-500/50 text-amber-500/90'}`}>
+                        <div className="font-bold mb-1 flex items-center gap-2">
+                          {isW003 ? <Zap className="w-4 h-4 text-orange-500" /> : <AlertTriangle className="w-4 h-4 text-amber-500" />}
+                          <Badge variant="outline" className={`text-[10px] font-mono px-1 py-0 h-4 ${isW003 ? 'border-orange-500/50 text-orange-500' : 'border-amber-500/50 text-amber-500'}`}>
+                            {warn.warningCode}
+                          </Badge>
+                          {warn.message}
+                        </div>
+                        <div className="text-muted-foreground opacity-70 ml-6">
+                          {'-->'} line {warn.line}, col {warn.column}
+                        </div>
                       </div>
-                      <div className="text-muted-foreground">
-                        {'-->'} line {warn.line}, col {warn.column}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -178,7 +332,7 @@ connect!(led1.cathode => gnd);`);
 
         {/* Right Column: Visualizer & LLM Analysis */}
         <div className="w-1/2 flex flex-col bg-background relative overflow-hidden">
-          {/* Netlist Visualizer Placeholder/Implementation */}
+          {/* Netlist Visualizer */}
           <div className="flex-1 p-6 flex flex-col">
             <div className="flex items-center justify-between mb-4">
               <span className="text-xs font-mono font-medium text-muted-foreground uppercase tracking-widest">
@@ -307,8 +461,8 @@ function NetlistGraph({ netlist }: { netlist: Netlist }) {
     const row = Math.floor(idx / cols);
     return {
       ...comp,
-      x: col * paddingX + 50,
-      y: row * paddingY + 50
+      x: col * paddingX + 60,
+      y: row * paddingY + 60
     };
   });
 
@@ -323,18 +477,34 @@ function NetlistGraph({ netlist }: { netlist: Netlist }) {
     // Just put them on the right/left randomly based on index for now
     const isRight = pinIdx % 2 === 0;
     
+    // Adjust layout slightly for larger nodes like modules
+    const width = node.category === 'module' ? compWidth + 20 : compWidth;
+    const height = node.category === 'module' ? compHeight + 20 : compHeight;
+    
     return {
-      x: node.x + (isRight ? compWidth : 0),
-      y: node.y + (compHeight / (totalPins + 1)) * (pinIdx + 1)
+      x: node.x + (isRight ? width : 0),
+      y: node.y + (height / (totalPins + 1)) * (pinIdx + 1)
     };
   };
 
   const getNetColor = (netType: string) => {
     switch (netType) {
       case 'power': return '#ef4444'; // red
-      case 'ground': return '#52525b'; // gray/black
+      case 'ground': return '#6b7280'; // dark gray
       case 'signal': return '#22c55e'; // green
-      default: return '#3b82f6';
+      default: return '#60a5fa'; // blue
+    }
+  };
+  
+  const getCategoryStyle = (category: string) => {
+    switch (category) {
+      case 'passive': return { border: '#6b7280', fill: 'hsl(var(--card))' };
+      case 'active_discrete': return { border: '#f59e0b', fill: 'hsl(var(--card))' };
+      case 'active_ic': return { border: '#8b5cf6', fill: 'hsl(var(--card))' };
+      case 'sensor': return { border: '#06b6d4', fill: 'hsl(var(--card))' };
+      case 'module': return { border: '#22c55e', fill: 'hsl(var(--card))' };
+      case 'power': return { border: '#ef4444', fill: 'hsl(var(--card))' };
+      default: return { border: 'hsl(var(--border))', fill: 'hsl(var(--card))' };
     }
   };
 
@@ -345,6 +515,9 @@ function NetlistGraph({ netlist }: { netlist: Netlist }) {
           <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
             <polygon points="0 0, 10 3.5, 0 7" fill="currentColor" className="text-muted-foreground/50"/>
           </marker>
+          <pattern id="zigzag" x="0" y="0" width="10" height="10" patternUnits="userSpaceOnUse">
+            <path d="M 0 5 L 5 0 L 10 5 L 5 10 Z" fill="none" stroke="currentColor" strokeWidth="0.5" className="text-muted-foreground/30" />
+          </pattern>
         </defs>
         
         {/* Draw connections */}
@@ -356,11 +529,11 @@ function NetlistGraph({ netlist }: { netlist: Netlist }) {
           
           // Bezier curve
           const dx = Math.abs(toPos.x - fromPos.x) * 0.5;
-          const path = `M \${fromPos.x} \${fromPos.y} C \${fromPos.x + dx} \${fromPos.y}, \${toPos.x - dx} \${toPos.y}, \${toPos.x} \${toPos.y}`;
+          const path = `M ${fromPos.x} ${fromPos.y} C ${fromPos.x + dx} ${fromPos.y}, ${toPos.x - dx} ${toPos.y}, ${toPos.x} ${toPos.y}`;
           
           return (
             <path
-              key={`conn-\${idx}`}
+              key={`conn-${idx}`}
               d={path}
               fill="none"
               stroke={color}
@@ -373,52 +546,79 @@ function NetlistGraph({ netlist }: { netlist: Netlist }) {
         })}
 
         {/* Draw components */}
-        {nodes.map(node => (
-          <g key={node.id} transform={`translate(\${node.x}, \${node.y})`} className="group cursor-pointer">
-            <rect 
-              width={compWidth} 
-              height={compHeight} 
-              rx="4" 
-              fill="hsl(var(--card))" 
-              stroke="hsl(var(--border))" 
-              strokeWidth="2"
-              className="group-hover:stroke-primary transition-colors duration-200"
-            />
-            <text x={compWidth/2} y={20} textAnchor="middle" fill="hsl(var(--foreground))" className="font-mono text-[11px] font-bold">
-              {node.name}
-            </text>
-            <text x={compWidth/2} y={35} textAnchor="middle" fill="hsl(var(--muted-foreground))" className="font-mono text-[9px]">
-              {node.type}
-            </text>
-            
-            {/* Draw pins */}
-            {node.pins.map((pin, pinIdx) => {
-              const isRight = pinIdx % 2 === 0;
-              const py = (compHeight / (node.pins.length + 1)) * (pinIdx + 1);
-              return (
-                <g key={pin.name}>
-                  <circle 
-                    cx={isRight ? compWidth : 0} 
-                    cy={py} 
-                    r="3" 
-                    fill="hsl(var(--background))" 
-                    stroke="hsl(var(--muted-foreground))" 
-                    strokeWidth="1.5"
-                  />
-                  <text 
-                    x={isRight ? compWidth - 6 : 6} 
-                    y={py + 3} 
-                    textAnchor={isRight ? "end" : "start"} 
-                    fill="hsl(var(--muted-foreground))" 
-                    className="font-mono text-[8px]"
-                  >
-                    {pin.name}
-                  </text>
-                </g>
-              );
-            })}
-          </g>
-        ))}
+        {nodes.map(node => {
+          const style = getCategoryStyle(node.category);
+          const isModule = node.category === 'module';
+          const w = isModule ? compWidth + 20 : compWidth;
+          const h = isModule ? compHeight + 20 : compHeight;
+          const cx = w / 2;
+          
+          return (
+            <g key={node.id} transform={`translate(${node.x}, ${node.y})`} className="group cursor-pointer">
+              {node.category === 'sensor' ? (
+                <rect 
+                  width={w} height={h} rx="16" 
+                  fill={style.fill} stroke={style.border} strokeWidth="2"
+                  className="group-hover:brightness-125 transition-all duration-200"
+                />
+              ) : (
+                <rect 
+                  width={w} height={h} rx="4" 
+                  fill={style.fill} stroke={style.border} strokeWidth={isModule ? "3" : "2"}
+                  className="group-hover:brightness-125 transition-all duration-200"
+                />
+              )}
+              
+              {/* Category Inner Symbols */}
+              {node.category === 'passive' && (
+                <rect x="25" y={15} width={w - 50} height={h - 30} fill="url(#zigzag)" stroke="none" />
+              )}
+              {node.category === 'active_discrete' && (
+                <path d={`M ${cx - 10} 25 L ${cx + 10} 35 L ${cx - 10} 45 Z`} fill="none" stroke={style.border} strokeWidth="1.5" />
+              )}
+              {node.category === 'active_ic' && (
+                <path d={`M ${cx - 15} 20 L ${cx + 15} 35 L ${cx - 15} 50 Z`} fill="none" stroke={style.border} strokeWidth="1.5" />
+              )}
+              {node.category === 'power' && (
+                <path d={`M ${cx + 2} 15 L ${cx - 8} 35 L ${cx + 2} 35 L ${cx - 2} 55 L ${cx + 10} 32 L ${cx} 32 Z`} fill={style.border} opacity="0.8" />
+              )}
+
+              <text x={cx} y={20} textAnchor="middle" fill="hsl(var(--foreground))" className="font-mono text-[11px] font-bold">
+                {node.name}
+              </text>
+              <text x={cx} y={h - 10} textAnchor="middle" fill="hsl(var(--muted-foreground))" className="font-mono text-[9px]">
+                {node.type}
+              </text>
+              
+              {/* Draw pins */}
+              {node.pins.map((pin, pinIdx) => {
+                const isRight = pinIdx % 2 === 0;
+                const py = (h / (node.pins.length + 1)) * (pinIdx + 1);
+                return (
+                  <g key={pin.name}>
+                    <circle 
+                      cx={isRight ? w : 0} 
+                      cy={py} 
+                      r="3" 
+                      fill="hsl(var(--background))" 
+                      stroke={style.border} 
+                      strokeWidth="1.5"
+                    />
+                    <text 
+                      x={isRight ? w - 6 : 6} 
+                      y={py + 3} 
+                      textAnchor={isRight ? "end" : "start"} 
+                      fill="hsl(var(--muted-foreground))" 
+                      className="font-mono text-[8px]"
+                    >
+                      {pin.name}
+                    </text>
+                  </g>
+                );
+              })}
+            </g>
+          );
+        })}
       </svg>
     </div>
   );

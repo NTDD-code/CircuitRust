@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
-  version: 0.1.0
+  version: 0.2.0
   description: Strict Circuit Compiler API
 servers:
   - url: /api
@@ -20,7 +20,6 @@ paths:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -54,7 +53,6 @@ paths:
       operationId: getExamples
       tags: [compiler]
       summary: Get example circuit definitions
-      description: Returns a list of pre-built example circuits
       responses:
         "200":
           description: List of example circuits
@@ -63,12 +61,45 @@ paths:
               schema:
                 $ref: "#/components/schemas/ExampleList"
 
+  /compiler/components:
+    get:
+      operationId: getComponentLibrary
+      tags: [compiler]
+      summary: Get full component library
+      description: Returns all available component definitions with pin metadata
+      responses:
+        "200":
+          description: Full component library
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComponentLibrary"
+
+  /compiler/export:
+    post:
+      operationId: exportNetlist
+      tags: [compiler]
+      summary: Export netlist to KiCad or Proteus format
+      description: Generate a standard .net file for KiCad or Proteus import
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExportRequest"
+      responses:
+        "200":
+          description: Exported netlist file content
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExportResult"
+
   /llm/analyze:
     post:
       operationId: analyzeCircuitSafety
       tags: [llm]
       summary: Analyze circuit safety with LLM
-      description: Use an LLM (Gemma 2B) to analyze circuit safety and provide recommendations
       requestBody:
         required: true
         content:
@@ -189,6 +220,11 @@ components:
           type: string
         type:
           type: string
+        category:
+          type: string
+          enum: [passive, active_discrete, active_ic, sensor, module, power]
+        voltageLevel:
+          type: number
         pins:
           type: array
           items:
@@ -201,6 +237,7 @@ components:
         - id
         - name
         - type
+        - category
         - pins
 
     Pin:
@@ -211,11 +248,22 @@ components:
         type:
           type: string
           enum: [power, ground, signal, analog, digital, bidirectional]
+        direction:
+          type: string
+          enum: [in, out, passive, power, ground, open_collector]
+        maxVoltage:
+          type: number
+        driveVoltage:
+          type: number
+        pinNumber:
+          type: integer
         net:
           type: string
       required:
         - name
         - type
+        - direction
+        - pinNumber
 
     NetlistConnection:
       type: object
@@ -274,6 +322,71 @@ components:
         - name
         - description
         - source
+
+    ComponentLibrary:
+      type: object
+      properties:
+        components:
+          type: array
+          items:
+            $ref: "#/components/schemas/ComponentInfo"
+      required:
+        - components
+
+    ComponentInfo:
+      type: object
+      properties:
+        type:
+          type: string
+        category:
+          type: string
+          enum: [passive, active_discrete, active_ic, sensor, module, power]
+        description:
+          type: string
+        aliases:
+          type: array
+          items:
+            type: string
+        voltageLevel:
+          type: number
+        pins:
+          type: array
+          items:
+            $ref: "#/components/schemas/Pin"
+      required:
+        - type
+        - category
+        - description
+        - pins
+
+    ExportRequest:
+      type: object
+      properties:
+        netlist:
+          $ref: "#/components/schemas/Netlist"
+        format:
+          type: string
+          enum: [kicad, proteus, spice]
+          default: kicad
+        title:
+          type: string
+      required:
+        - netlist
+
+    ExportResult:
+      type: object
+      properties:
+        content:
+          type: string
+          description: File content of the exported netlist
+        filename:
+          type: string
+        format:
+          type: string
+      required:
+        - content
+        - filename
+        - format
 
     LlmAnalyzeRequest:
       type: object

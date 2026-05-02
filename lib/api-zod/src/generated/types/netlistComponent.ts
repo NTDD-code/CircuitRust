@@ -3,8 +3,9 @@
  * Do not edit manually.
  * Api
  * Strict Circuit Compiler API
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.2.0
  */
+import type { NetlistComponentCategory } from "./netlistComponentCategory";
 import type { NetlistComponentProperties } from "./netlistComponentProperties";
 import type { Pin } from "./pin";
 
@@ -12,6 +13,8 @@ export interface NetlistComponent {
   id: string;
   name: string;
   type: string;
+  category: NetlistComponentCategory;
+  voltageLevel?: number;
   pins: Pin[];
   properties?: NetlistComponentProperties;
 }

@@ -5,7 +5,8 @@
  * Strict Circuit Compiler API
  * OpenAPI spec version: 0.2.0
  */
+import type { ComponentInfo } from "./componentInfo";
 
-export interface HealthStatus {
-  status: string;
+export interface ComponentLibrary {
+  components: ComponentInfo[];
 }

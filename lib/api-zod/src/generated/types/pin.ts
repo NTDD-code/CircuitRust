@@ -3,12 +3,17 @@
  * Do not edit manually.
  * Api
  * Strict Circuit Compiler API
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.2.0
  */
+import type { PinDirection } from "./pinDirection";
 import type { PinType } from "./pinType";
 
 export interface Pin {
   name: string;
   type: PinType;
+  direction: PinDirection;
+  maxVoltage?: number;
+  driveVoltage?: number;
+  pinNumber: number;
   net?: string;
 }

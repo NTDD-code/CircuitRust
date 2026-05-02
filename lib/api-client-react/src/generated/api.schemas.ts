@@ -3,7 +3,7 @@
  * Do not edit manually.
  * Api
  * Strict Circuit Compiler API
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.2.0
  */
 export interface HealthStatus {
   status: string;
@@ -37,6 +37,18 @@ export interface CompileWarning {
   warningCode: string;
 }
 
+export type NetlistComponentCategory =
+  (typeof NetlistComponentCategory)[keyof typeof NetlistComponentCategory];
+
+export const NetlistComponentCategory = {
+  passive: "passive",
+  active_discrete: "active_discrete",
+  active_ic: "active_ic",
+  sensor: "sensor",
+  module: "module",
+  power: "power",
+} as const;
+
 export type PinType = (typeof PinType)[keyof typeof PinType];
 
 export const PinType = {
@@ -48,9 +60,24 @@ export const PinType = {
   bidirectional: "bidirectional",
 } as const;
 
+export type PinDirection = (typeof PinDirection)[keyof typeof PinDirection];
+
+export const PinDirection = {
+  in: "in",
+  out: "out",
+  passive: "passive",
+  power: "power",
+  ground: "ground",
+  open_collector: "open_collector",
+} as const;
+
 export interface Pin {
   name: string;
   type: PinType;
+  direction: PinDirection;
+  maxVoltage?: number;
+  driveVoltage?: number;
+  pinNumber: number;
   net?: string;
 }
 
@@ -60,6 +87,8 @@ export interface NetlistComponent {
   id: string;
   name: string;
   type: string;
+  category: NetlistComponentCategory;
+  voltageLevel?: number;
   pins: Pin[];
   properties?: NetlistComponentProperties;
 }
@@ -107,6 +136,53 @@ export interface Example {
 
 export interface ExampleList {
   examples: Example[];
+}
+
+export type ComponentInfoCategory =
+  (typeof ComponentInfoCategory)[keyof typeof ComponentInfoCategory];
+
+export const ComponentInfoCategory = {
+  passive: "passive",
+  active_discrete: "active_discrete",
+  active_ic: "active_ic",
+  sensor: "sensor",
+  module: "module",
+  power: "power",
+} as const;
+
+export interface ComponentInfo {
+  type: string;
+  category: ComponentInfoCategory;
+  description: string;
+  aliases?: string[];
+  voltageLevel?: number;
+  pins: Pin[];
+}
+
+export interface ComponentLibrary {
+  components: ComponentInfo[];
+}
+
+export type ExportRequestFormat =
+  (typeof ExportRequestFormat)[keyof typeof ExportRequestFormat];
+
+export const ExportRequestFormat = {
+  kicad: "kicad",
+  proteus: "proteus",
+  spice: "spice",
+} as const;
+
+export interface ExportRequest {
+  netlist: Netlist;
+  format?: ExportRequestFormat;
+  title?: string;
+}
+
+export interface ExportResult {
+  /** File content of the exported netlist */
+  content: string;
+  filename: string;
+  format: string;
 }
 
 export interface LlmAnalyzeRequest {

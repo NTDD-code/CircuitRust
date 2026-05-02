@@ -3,7 +3,7 @@
  * Do not edit manually.
  * Api
  * Strict Circuit Compiler API
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.2.0
  */
 import { useMutation, useQuery } from "@tanstack/react-query";
 import type {
@@ -19,7 +19,10 @@ import type {
 import type {
   CompileRequest,
   CompileResult,
+  ComponentLibrary,
   ExampleList,
+  ExportRequest,
+  ExportResult,
   HealthStatus,
   LlmAnalyzeRequest,
   LlmAnalyzeResult,
@@ -35,7 +38,6 @@ type Awaited<O> = O extends AwaitedInput<infer T> ? T : never;
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 /**
- * Returns server health status
  * @summary Health check
  */
 export const getHealthCheckUrl = () => {
@@ -198,7 +200,6 @@ export const useCompileCircuit = <
 };
 
 /**
- * Returns a list of pre-built example circuits
  * @summary Get example circuit definitions
  */
 export const getGetExamplesUrl = () => {
@@ -274,7 +275,169 @@ export function useGetExamples<
 }
 
 /**
- * Use an LLM (Gemma 2B) to analyze circuit safety and provide recommendations
+ * Returns all available component definitions with pin metadata
+ * @summary Get full component library
+ */
+export const getGetComponentLibraryUrl = () => {
+  return `/api/compiler/components`;
+};
+
+export const getComponentLibrary = async (
+  options?: RequestInit,
+): Promise<ComponentLibrary> => {
+  return customFetch<ComponentLibrary>(getGetComponentLibraryUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetComponentLibraryQueryKey = () => {
+  return [`/api/compiler/components`] as const;
+};
+
+export const getGetComponentLibraryQueryOptions = <
+  TData = Awaited<ReturnType<typeof getComponentLibrary>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getComponentLibrary>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetComponentLibraryQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getComponentLibrary>>
+  > = ({ signal }) => getComponentLibrary({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getComponentLibrary>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetComponentLibraryQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getComponentLibrary>>
+>;
+export type GetComponentLibraryQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get full component library
+ */
+
+export function useGetComponentLibrary<
+  TData = Awaited<ReturnType<typeof getComponentLibrary>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getComponentLibrary>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetComponentLibraryQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Generate a standard .net file for KiCad or Proteus import
+ * @summary Export netlist to KiCad or Proteus format
+ */
+export const getExportNetlistUrl = () => {
+  return `/api/compiler/export`;
+};
+
+export const exportNetlist = async (
+  exportRequest: ExportRequest,
+  options?: RequestInit,
+): Promise<ExportResult> => {
+  return customFetch<ExportResult>(getExportNetlistUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(exportRequest),
+  });
+};
+
+export const getExportNetlistMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof exportNetlist>>,
+    TError,
+    { data: BodyType<ExportRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof exportNetlist>>,
+  TError,
+  { data: BodyType<ExportRequest> },
+  TContext
+> => {
+  const mutationKey = ["exportNetlist"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof exportNetlist>>,
+    { data: BodyType<ExportRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return exportNetlist(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ExportNetlistMutationResult = NonNullable<
+  Awaited<ReturnType<typeof exportNetlist>>
+>;
+export type ExportNetlistMutationBody = BodyType<ExportRequest>;
+export type ExportNetlistMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Export netlist to KiCad or Proteus format
+ */
+export const useExportNetlist = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof exportNetlist>>,
+    TError,
+    { data: BodyType<ExportRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof exportNetlist>>,
+  TError,
+  { data: BodyType<ExportRequest> },
+  TContext
+> => {
+  return useMutation(getExportNetlistMutationOptions(options));
+};
+
+/**
  * @summary Analyze circuit safety with LLM
  */
 export const getAnalyzeCircuitSafetyUrl = () => {

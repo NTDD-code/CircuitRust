@@ -3,7 +3,7 @@
  * Do not edit manually.
  * Api
  * Strict Circuit Compiler API
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.2.0
  */
 
 export * from "./compileError";
@@ -11,18 +11,26 @@ export * from "./compileErrorSeverity";
 export * from "./compileRequest";
 export * from "./compileResult";
 export * from "./compileWarning";
+export * from "./componentInfo";
+export * from "./componentInfoCategory";
+export * from "./componentLibrary";
 export * from "./example";
 export * from "./exampleList";
+export * from "./exportRequest";
+export * from "./exportRequestFormat";
+export * from "./exportResult";
 export * from "./healthStatus";
 export * from "./llmAnalyzeRequest";
 export * from "./llmAnalyzeResult";
 export * from "./net";
 export * from "./netlist";
 export * from "./netlistComponent";
+export * from "./netlistComponentCategory";
 export * from "./netlistComponentProperties";
 export * from "./netlistConnection";
 export * from "./netType";
 export * from "./pin";
+export * from "./pinDirection";
 export * from "./pinType";
 export * from "./riskItem";
 export * from "./riskItemSeverity";

@@ -3,12 +3,11 @@
  * Do not edit manually.
  * Api
  * Strict Circuit Compiler API
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.2.0
  */
 import * as zod from "zod";
 
 /**
- * Returns server health status
  * @summary Health check
  */
 export const HealthCheckResponse = zod.object({
@@ -49,6 +48,15 @@ export const CompileCircuitResponse = zod.object({
           id: zod.string(),
           name: zod.string(),
           type: zod.string(),
+          category: zod.enum([
+            "passive",
+            "active_discrete",
+            "active_ic",
+            "sensor",
+            "module",
+            "power",
+          ]),
+          voltageLevel: zod.number().optional(),
           pins: zod.array(
             zod.object({
               name: zod.string(),
@@ -60,6 +68,17 @@ export const CompileCircuitResponse = zod.object({
                 "digital",
                 "bidirectional",
               ]),
+              direction: zod.enum([
+                "in",
+                "out",
+                "passive",
+                "power",
+                "ground",
+                "open_collector",
+              ]),
+              maxVoltage: zod.number().optional(),
+              driveVoltage: zod.number().optional(),
+              pinNumber: zod.number(),
               net: zod.string().optional(),
             }),
           ),
@@ -87,7 +106,6 @@ export const CompileCircuitResponse = zod.object({
 });
 
 /**
- * Returns a list of pre-built example circuits
  * @summary Get example circuit definitions
  */
 export const GetExamplesResponse = zod.object({
@@ -101,7 +119,133 @@ export const GetExamplesResponse = zod.object({
 });
 
 /**
- * Use an LLM (Gemma 2B) to analyze circuit safety and provide recommendations
+ * Returns all available component definitions with pin metadata
+ * @summary Get full component library
+ */
+export const GetComponentLibraryResponse = zod.object({
+  components: zod.array(
+    zod.object({
+      type: zod.string(),
+      category: zod.enum([
+        "passive",
+        "active_discrete",
+        "active_ic",
+        "sensor",
+        "module",
+        "power",
+      ]),
+      description: zod.string(),
+      aliases: zod.array(zod.string()).optional(),
+      voltageLevel: zod.number().optional(),
+      pins: zod.array(
+        zod.object({
+          name: zod.string(),
+          type: zod.enum([
+            "power",
+            "ground",
+            "signal",
+            "analog",
+            "digital",
+            "bidirectional",
+          ]),
+          direction: zod.enum([
+            "in",
+            "out",
+            "passive",
+            "power",
+            "ground",
+            "open_collector",
+          ]),
+          maxVoltage: zod.number().optional(),
+          driveVoltage: zod.number().optional(),
+          pinNumber: zod.number(),
+          net: zod.string().optional(),
+        }),
+      ),
+    }),
+  ),
+});
+
+/**
+ * Generate a standard .net file for KiCad or Proteus import
+ * @summary Export netlist to KiCad or Proteus format
+ */
+export const exportNetlistBodyFormatDefault = `kicad`;
+
+export const ExportNetlistBody = zod.object({
+  netlist: zod.object({
+    components: zod.array(
+      zod.object({
+        id: zod.string(),
+        name: zod.string(),
+        type: zod.string(),
+        category: zod.enum([
+          "passive",
+          "active_discrete",
+          "active_ic",
+          "sensor",
+          "module",
+          "power",
+        ]),
+        voltageLevel: zod.number().optional(),
+        pins: zod.array(
+          zod.object({
+            name: zod.string(),
+            type: zod.enum([
+              "power",
+              "ground",
+              "signal",
+              "analog",
+              "digital",
+              "bidirectional",
+            ]),
+            direction: zod.enum([
+              "in",
+              "out",
+              "passive",
+              "power",
+              "ground",
+              "open_collector",
+            ]),
+            maxVoltage: zod.number().optional(),
+            driveVoltage: zod.number().optional(),
+            pinNumber: zod.number(),
+            net: zod.string().optional(),
+          }),
+        ),
+        properties: zod.record(zod.string(), zod.string()).optional(),
+      }),
+    ),
+    connections: zod.array(
+      zod.object({
+        from: zod.string(),
+        fromPin: zod.string(),
+        to: zod.string(),
+        toPin: zod.string(),
+        net: zod.string(),
+      }),
+    ),
+    nets: zod.array(
+      zod.object({
+        name: zod.string(),
+        type: zod.enum(["power", "ground", "signal"]),
+        voltage: zod.number().optional(),
+      }),
+    ),
+  }),
+  format: zod
+    .enum(["kicad", "proteus", "spice"])
+    .default(exportNetlistBodyFormatDefault),
+  title: zod.string().optional(),
+});
+
+export const ExportNetlistResponse = zod.object({
+  content: zod.string().describe("File content of the exported netlist"),
+  filename: zod.string(),
+  format: zod.string(),
+});
+
+/**
  * @summary Analyze circuit safety with LLM
  */
 export const AnalyzeCircuitSafetyBody = zod.object({
@@ -113,6 +257,15 @@ export const AnalyzeCircuitSafetyBody = zod.object({
           id: zod.string(),
           name: zod.string(),
           type: zod.string(),
+          category: zod.enum([
+            "passive",
+            "active_discrete",
+            "active_ic",
+            "sensor",
+            "module",
+            "power",
+          ]),
+          voltageLevel: zod.number().optional(),
           pins: zod.array(
             zod.object({
               name: zod.string(),
@@ -124,6 +277,17 @@ export const AnalyzeCircuitSafetyBody = zod.object({
                 "digital",
                 "bidirectional",
               ]),
+              direction: zod.enum([
+                "in",
+                "out",
+                "passive",
+                "power",
+                "ground",
+                "open_collector",
+              ]),
+              maxVoltage: zod.number().optional(),
+              driveVoltage: zod.number().optional(),
+              pinNumber: zod.number(),
               net: zod.string().optional(),
             }),
           ),

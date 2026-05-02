@@ -6,6 +6,9 @@
  * OpenAPI spec version: 0.2.0
  */
 
-export interface HealthStatus {
-  status: string;
+export interface ExportResult {
+  /** File content of the exported netlist */
+  content: string;
+  filename: string;
+  format: string;
 }
