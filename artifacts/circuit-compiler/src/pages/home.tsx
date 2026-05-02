@@ -41,6 +41,8 @@ import { AiSettingsDrawer } from "@/components/ai-settings-drawer";
 import { SchematicRenderer } from "@/components/schematic-renderer";
 import { BomPanel } from "@/components/bom-panel";
 import { loadAiSettings, saveAiSettings, getProviderLabel, isProviderConfigured, type AiProviderSettings } from "@/lib/ai-provider";
+import { generateFix, FIX_LABELS } from "@/lib/safety-fix";
+import type { SafetyIssue } from "@workspace/api-client-react";
 
 type LucideIcon = ForwardRefExoticComponent<Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>>;
 type OutputTabDef = { id: OutputTab; icon: LucideIcon; label: string; disabled?: boolean };
@@ -68,6 +70,8 @@ export default function Home() {
   const [aiSettings, setAiSettings] = useState<AiProviderSettings>(loadAiSettings);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [outputTab, setOutputTab] = useState<OutputTab>("output");
+  const [applyingFix, setApplyingFix] = useState<string | null>(null);
+  const [appliedFix, setAppliedFix] = useState<string | null>(null);
 
   const insertTextRef = useRef<((text: string) => void) | null>(null);
 
@@ -143,6 +147,37 @@ export default function Home() {
   const registerInsert = useCallback((cb: (text: string) => void) => {
     insertTextRef.current = cb;
   }, []);
+
+  const handleApplyFix = useCallback((issue: SafetyIssue) => {
+    const result = generateFix(issue.code, issue.detail ?? issue.message, source);
+    if (!result) return;
+
+    // Apply fixed source to the editor
+    if (insertTextRef.current) insertTextRef.current(result.fixed);
+    setSource(result.fixed);
+    setApplyingFix(issue.code);
+    setAppliedFix(null);
+
+    // Recompile with the fixed source after a short settle delay
+    setTimeout(() => {
+      setCompileResult(null);
+      setAnalysisResult(null);
+      setOutputTab("output");
+      compileMutation.mutate(
+        { data: { source: result.fixed } },
+        {
+          onSuccess: (r) => {
+            setCompileResult(r);
+            setApplyingFix(null);
+            setAppliedFix(issue.code);
+            if (r.success && r.netlist) setOutputTab("visualizer");
+            // Clear the "applied" tick after 3 s
+            setTimeout(() => setAppliedFix(null), 3000);
+          },
+        },
+      );
+    }, 250);
+  }, [source, compileMutation]);
 
   const providerConfigured = isProviderConfigured(aiSettings);
   const providerLabel = getProviderLabel(aiSettings);
@@ -437,10 +472,16 @@ export default function Home() {
                               DANGER:   { icon: "⚡", color: "#F0883E", bg: "#3D2A0A", badge: "#F0883E", label: "DANGER" },
                               WARNING:  { icon: "⚠️", color: "#D29922", bg: "#2D2200", badge: "#D29922", label: "WARNING" },
                             }[issue.severity];
+
+                            const fixLabel    = FIX_LABELS[issue.code];
+                            const isApplying  = applyingFix === issue.code;
+                            const wasApplied  = appliedFix  === issue.code;
+                            const canFix      = !!fixLabel && !isApplying;
+
                             return (
                               <div
                                 key={i}
-                                className="rounded-md p-2.5 space-y-1"
+                                className="rounded-md p-2.5 space-y-1.5"
                                 style={{ background: cfg.bg, border: `1px solid ${cfg.color}44` }}
                               >
                                 <div className="flex items-start gap-2">
@@ -467,6 +508,29 @@ export default function Home() {
                                     </div>
                                   </div>
                                 </div>
+
+                                {/* ── Apply Fix button ── */}
+                                {canFix && (
+                                  <button
+                                    onClick={() => handleApplyFix(issue)}
+                                    disabled={isApplying}
+                                    className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded text-[10px] font-mono font-semibold transition-all"
+                                    style={{
+                                      background:   wasApplied ? "#0D3320" : `${cfg.color}18`,
+                                      border:       `1px solid ${wasApplied ? "#3FB950" : cfg.color}66`,
+                                      color:        wasApplied ? "#3FB950" : cfg.color,
+                                      cursor:       isApplying ? "wait" : "pointer",
+                                    }}
+                                  >
+                                    {wasApplied ? (
+                                      <>✓ Fix applied — recompiled</>
+                                    ) : isApplying ? (
+                                      <><Loader2 className="w-3 h-3 animate-spin" /> Applying fix &amp; recompiling…</>
+                                    ) : (
+                                      <>⚡ Apply Fix: {fixLabel}</>
+                                    )}
+                                  </button>
+                                )}
                               </div>
                             );
                           })}
