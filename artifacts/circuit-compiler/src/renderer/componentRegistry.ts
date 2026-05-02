@@ -55,9 +55,18 @@ export const COMPONENT_REGISTRY: Record<string, ComponentRegistryEntry> = {
   NMOSFET:          { symbolId: "MOSFET_N",        category: "transistor", hw: 48, hh: 48 },
   PMOSFET:          { symbolId: "MOSFET_P",        category: "transistor", hw: 48, hh: 48 },
 
+  // ── Op-Amps (proper triangle symbol) ────────────────────────────────────────
+  OpAmp:            { symbolId: "OPAMP",           category: "active_ic",  hw: 48, hh: 40 },
+  LM741:            { symbolId: "OPAMP",           category: "active_ic",  hw: 48, hh: 40 },
+  LM358:            { symbolId: "OPAMP",           category: "active_ic",  hw: 48, hh: 40 },
+  LM393:            { symbolId: "OPAMP",           category: "active_ic",  hw: 48, hh: 40 },
+  LM324:            { symbolId: "OPAMP",           category: "active_ic",  hw: 48, hh: 40 },
+  TL071:            { symbolId: "OPAMP",           category: "active_ic",  hw: 48, hh: 40 },
+  TL072:            { symbolId: "OPAMP",           category: "active_ic",  hw: 48, hh: 40 },
+
   // ── Actuators / Electromechanical ───────────────────────────────────────────
   Motor:            { symbolId: "MOTOR",           category: "actuator",   hw: 48, hh: 40 },
-  Buzzer:           { symbolId: "BUZZER",          category: "actuator",   hw: 40, hh: 48 },
+  Buzzer:           { symbolId: "BUZZER",          category: "actuator",   hw: 44, hh: 44 },
   Relay:            { symbolId: "RELAY",           category: "actuator",   hw: 48, hh: 40 },
 
   // ── Modules / ICs (rendered with generic IC box) ────────────────────────────
@@ -70,9 +79,6 @@ export const COMPONENT_REGISTRY: Record<string, ComponentRegistryEntry> = {
   STM32F103:        { symbolId: "IC", category: "active_ic", hw: 68, hh: 80  },
   ATmega328P:       { symbolId: "IC", category: "active_ic", hw: 68, hh: 80  },
   LM555:            { symbolId: "IC", category: "active_ic", hw: 68, hh: 60  },
-  LM741:            { symbolId: "IC", category: "active_ic", hw: 68, hh: 60  },
-  LM358:            { symbolId: "IC", category: "active_ic", hw: 68, hh: 60  },
-  LM393:            { symbolId: "IC", category: "active_ic", hw: 68, hh: 60  },
   NE555:            { symbolId: "IC", category: "active_ic", hw: 68, hh: 60  },
   ULN2003:          { symbolId: "IC", category: "active_ic", hw: 68, hh: 60  },
   L293D:            { symbolId: "IC", category: "active_ic", hw: 68, hh: 80  },
