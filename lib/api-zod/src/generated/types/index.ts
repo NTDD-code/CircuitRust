@@ -42,3 +42,5 @@ export * from "./pinDirection";
 export * from "./pinType";
 export * from "./riskItem";
 export * from "./riskItemSeverity";
+export * from "./safetyIssue";
+export * from "./safetyIssueSeverity";

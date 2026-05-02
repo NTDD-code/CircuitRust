@@ -8,10 +8,12 @@
 import type { CompileError } from "./compileError";
 import type { CompileWarning } from "./compileWarning";
 import type { Netlist } from "./netlist";
+import type { SafetyIssue } from "./safetyIssue";
 
 export interface CompileResult {
   success: boolean;
   errors: CompileError[];
   warnings: CompileWarning[];
+  safetyIssues: SafetyIssue[];
   netlist?: Netlist;
 }

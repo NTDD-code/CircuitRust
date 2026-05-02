@@ -41,6 +41,15 @@ export const CompileCircuitResponse = zod.object({
       warningCode: zod.string(),
     }),
   ),
+  safetyIssues: zod.array(
+    zod.object({
+      severity: zod.enum(["CRITICAL", "FATAL", "WARNING", "DANGER"]),
+      code: zod.string(),
+      message: zod.string(),
+      line: zod.number(),
+      detail: zod.string().optional(),
+    }),
+  ),
   netlist: zod
     .object({
       components: zod.array(

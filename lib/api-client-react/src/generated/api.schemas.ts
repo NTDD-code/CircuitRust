@@ -37,6 +37,24 @@ export interface CompileWarning {
   warningCode: string;
 }
 
+export type SafetyIssueSeverity =
+  (typeof SafetyIssueSeverity)[keyof typeof SafetyIssueSeverity];
+
+export const SafetyIssueSeverity = {
+  CRITICAL: "CRITICAL",
+  FATAL: "FATAL",
+  WARNING: "WARNING",
+  DANGER: "DANGER",
+} as const;
+
+export interface SafetyIssue {
+  severity: SafetyIssueSeverity;
+  code: string;
+  message: string;
+  line: number;
+  detail?: string;
+}
+
 export type NetlistComponentCategory =
   (typeof NetlistComponentCategory)[keyof typeof NetlistComponentCategory];
 
@@ -128,6 +146,7 @@ export interface CompileResult {
   success: boolean;
   errors: CompileError[];
   warnings: CompileWarning[];
+  safetyIssues: SafetyIssue[];
   netlist?: Netlist;
 }
 

@@ -203,12 +203,37 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/CompileWarning"
+        safetyIssues:
+          type: array
+          items:
+            $ref: "#/components/schemas/SafetyIssue"
         netlist:
           $ref: "#/components/schemas/Netlist"
       required:
         - success
         - errors
         - warnings
+        - safetyIssues
+
+    SafetyIssue:
+      type: object
+      properties:
+        severity:
+          type: string
+          enum: [CRITICAL, FATAL, WARNING, DANGER]
+        code:
+          type: string
+        message:
+          type: string
+        line:
+          type: integer
+        detail:
+          type: string
+      required:
+        - severity
+        - code
+        - message
+        - line
 
     CompileError:
       type: object

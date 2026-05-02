@@ -413,6 +413,67 @@ export default function Home() {
                         </div>
                       )}
 
+                      {/* ── Safety Audit ── */}
+                      {compileResult.safetyIssues && compileResult.safetyIssues.length > 0 && (
+                        <div className="space-y-2">
+                          <div
+                            className="flex items-center gap-2 pt-1 pb-1 border-b"
+                            style={{ borderColor: "#21262D" }}
+                          >
+                            <span className="text-[10px] font-mono font-bold uppercase tracking-widest" style={{ color: "#FF6B35" }}>
+                              🔥 Safety Audit
+                            </span>
+                            <Badge
+                              className="text-[9px] font-mono px-1.5 py-0 h-4"
+                              style={{ background: "#3D1A0A", color: "#FF6B35", border: "1px solid #FF6B35" }}
+                            >
+                              {compileResult.safetyIssues.length} issue{compileResult.safetyIssues.length !== 1 ? "s" : ""}
+                            </Badge>
+                          </div>
+                          {compileResult.safetyIssues.map((issue, i) => {
+                            const cfg = {
+                              FATAL:    { icon: "💥", color: "#FF2D20", bg: "#3D0A0A", badge: "#FF2D20", label: "FATAL ERROR" },
+                              CRITICAL: { icon: "🔥", color: "#FF6B35", bg: "#3D1A0A", badge: "#FF6B35", label: "CRITICAL" },
+                              DANGER:   { icon: "⚡", color: "#F0883E", bg: "#3D2A0A", badge: "#F0883E", label: "DANGER" },
+                              WARNING:  { icon: "⚠️", color: "#D29922", bg: "#2D2200", badge: "#D29922", label: "WARNING" },
+                            }[issue.severity];
+                            return (
+                              <div
+                                key={i}
+                                className="rounded-md p-2.5 space-y-1"
+                                style={{ background: cfg.bg, border: `1px solid ${cfg.color}44` }}
+                              >
+                                <div className="flex items-start gap-2">
+                                  <span className="text-sm shrink-0 mt-px">{cfg.icon}</span>
+                                  <div className="flex-1 space-y-0.5">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <Badge
+                                        className="text-[9px] font-mono px-1.5 py-0 h-4 shrink-0"
+                                        style={{ background: "transparent", color: cfg.color, border: `1px solid ${cfg.color}` }}
+                                      >
+                                        [{cfg.label}]
+                                      </Badge>
+                                      <span className="font-semibold text-[11px]" style={{ color: cfg.color }}>
+                                        {issue.message}
+                                      </span>
+                                    </div>
+                                    {issue.detail && (
+                                      <div className="text-[10px] leading-relaxed" style={{ color: "#8B949E" }}>
+                                        {issue.detail}
+                                      </div>
+                                    )}
+                                    <div className="text-[9px]" style={{ color: "#6E7681" }}>
+                                      {issue.code} · line {issue.line}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* ── Compiler Errors ── */}
                       {compileResult.errors.map((err, i) => (
                         <div
                           key={i}

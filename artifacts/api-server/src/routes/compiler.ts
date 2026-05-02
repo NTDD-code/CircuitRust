@@ -32,6 +32,65 @@ router.post("/compiler/compile", (req, res) => {
     ? buildNetlist(parseResult.components, parseResult.connections, parseResult.nets)
     : undefined;
 
+  // ── Safety Audit layer ─────────────────────────────────────────────────────
+  // Maps specific error/warning codes to human-readable safety issues with
+  // named severity levels. These always appear regardless of compile success.
+  type SafetySeverity = "CRITICAL" | "FATAL" | "WARNING" | "DANGER";
+  interface SafetyIssue {
+    severity: SafetySeverity;
+    code: string;
+    message: string;
+    line: number;
+    detail?: string;
+  }
+  const safetyIssues: SafetyIssue[] = [];
+
+  for (const err of allErrors) {
+    // E001 — short circuit (power directly to ground)
+    if (err.errorCode === "E001") {
+      safetyIssues.push({
+        severity: "FATAL",
+        code: "S001",
+        message: "Short circuit detected! Power supply will be damaged.",
+        detail: err.message,
+        line: err.line,
+      });
+    }
+    // E007 — LED with no current-limiting resistor
+    if (err.errorCode === "E007") {
+      safetyIssues.push({
+        severity: "CRITICAL",
+        code: "S002",
+        message: "LED will burn out immediately! Current limiting resistor is missing.",
+        detail: err.message,
+        line: err.line,
+      });
+    }
+    // E008 — high-current load driven directly by MCU GPIO
+    if (err.errorCode === "E008") {
+      safetyIssues.push({
+        severity: "DANGER",
+        code: "S004",
+        message: "High current detected! This will fry your microcontroller pin.",
+        detail: err.message,
+        line: err.line,
+      });
+    }
+  }
+
+  for (const warn of validationResult.warnings) {
+    // W003 — voltage mismatch (e.g. 5V output into 3.3V input)
+    if (warn.warningCode === "W003") {
+      safetyIssues.push({
+        severity: "WARNING",
+        code: "S003",
+        message: "Overvoltage risk! Component may be damaged by excessive voltage.",
+        detail: warn.message,
+        line: warn.line,
+      });
+    }
+  }
+
   res.json({
     success,
     errors: allErrors.map((e) => ({
@@ -40,6 +99,7 @@ router.post("/compiler/compile", (req, res) => {
     warnings: validationResult.warnings.map((w) => ({
       line: w.line, column: w.column, message: w.message, warningCode: w.warningCode,
     })),
+    safetyIssues,
     ...(netlist ? { netlist } : {}),
   });
 });
