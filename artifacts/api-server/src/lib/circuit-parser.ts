@@ -586,6 +586,47 @@ export const COMPONENT_DEFS: Record<string, ComponentDef> = {
       { name: "rx",    type: "digital", direction: "in",   maxVoltage: 3.6, pinNumber: 23 },
     ],
   },
+
+  // ── Actuators / High-current loads ────────────────────────────────────────
+  Motor: {
+    category: "actuator",
+    description: "DC motor — requires transistor/H-bridge driver and flyback diode",
+    aliases: ["DCMotor", "DCM"],
+    pins: [
+      { name: "m_pos", type: "analog", direction: "passive", pinNumber: 1 },
+      { name: "m_neg", type: "analog", direction: "passive", pinNumber: 2 },
+    ],
+  },
+  Buzzer: {
+    category: "actuator",
+    description: "Piezoelectric or electromagnetic buzzer — high-current, needs driver and flyback",
+    aliases: ["Speaker", "Piezo"],
+    pins: [
+      { name: "vcc", type: "analog", direction: "passive", pinNumber: 1 },
+      { name: "gnd", type: "analog", direction: "passive", pinNumber: 2 },
+    ],
+  },
+  Relay: {
+    category: "actuator",
+    description: "Electromagnetic relay — inductive coil with switch contacts, requires flyback diode",
+    aliases: ["RELAY", "ElectroRelay"],
+    pins: [
+      { name: "coil_a", type: "analog", direction: "passive", pinNumber: 1 },
+      { name: "coil_b", type: "analog", direction: "passive", pinNumber: 2 },
+      { name: "com",    type: "analog", direction: "passive", pinNumber: 3 },
+      { name: "no",     type: "analog", direction: "passive", pinNumber: 4 },
+      { name: "nc",     type: "analog", direction: "passive", pinNumber: 5 },
+    ],
+  },
+  Solenoid: {
+    category: "actuator",
+    description: "Electromagnetic solenoid / linear actuator — inductive, requires flyback diode",
+    aliases: ["LinearActuator"],
+    pins: [
+      { name: "coil_a", type: "analog", direction: "passive", pinNumber: 1 },
+      { name: "coil_b", type: "analog", direction: "passive", pinNumber: 2 },
+    ],
+  },
 };
 
 function buildAlias(): Map<string, string> {

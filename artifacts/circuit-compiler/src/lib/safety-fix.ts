@@ -279,4 +279,7 @@ export const FIX_LABELS: Record<string, string> = {
   S005: "Insert 10kΩ base resistor",
   S006: "Add collector load resistor",
   S007: "Review BJT drive voltage",
+  S008: "Add series resistor between GPIO pins",
+  S009: "Add flyback diode in reverse-parallel",
+  S010: "Swap power and ground connections",
 };

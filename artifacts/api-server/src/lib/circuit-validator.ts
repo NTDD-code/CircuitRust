@@ -415,6 +415,149 @@ export function validateCircuit(
     }
   }
 
+  // ── E011: Logic Contention — two MCU GPIO pins wired directly ────────────────
+  // GPIO pins are bidirectional; when both are configured as output and shorted
+  // together with no series resistor they fight each other and burn internal
+  // output-stage circuitry.
+  const BUS_PIN_NAMES = new Set([
+    "sda", "scl",                          // I2C
+    "tx", "rx",                            // UART
+    "mosi", "miso", "sck", "ss", "cs", "nss", // SPI
+    "reset", "en", "boot", "aref",         // control / reference
+  ]);
+  const GPIO_PIN_TYPES = new Set<PinType>(["digital", "analog"]);
+
+  for (const conn of connections) {
+    const fromComp = components.get(conn.from);
+    const toComp   = components.get(conn.to);
+    if (!fromComp || !toComp) continue;
+    if (!MCU_TYPES.has(fromComp.type) || !MCU_TYPES.has(toComp.type)) continue;
+
+    const fromPin = fromComp.pins.find((p) => p.name === conn.fromPin);
+    const toPin   = toComp.pins.find((p) => p.name === conn.toPin);
+    if (!fromPin || !toPin) continue;
+
+    // Only general-purpose IO pins — skip power, ground, and bus-protocol pins
+    if (!GPIO_PIN_TYPES.has(fromPin.type) || !GPIO_PIN_TYPES.has(toPin.type)) continue;
+    if (BUS_PIN_NAMES.has(conn.fromPin) || BUS_PIN_NAMES.has(conn.toPin)) continue;
+
+    const srcLine = sourceLines[conn.line - 1] ?? "";
+    errors.push({
+      line: conn.line, column: 1,
+      message: `E011: Logic contention — '${conn.from}.${conn.fromPin}' (MCU GPIO) is directly wired to '${conn.to}.${conn.toPin}' (MCU GPIO) with no series resistor. When both drive opposite logic levels simultaneously this creates a low-impedance conflict that destroys internal output-stage circuitry.`,
+      errorCode: "E011", severity: "error", sourceLine: srcLine,
+    });
+  }
+
+  // ── E012: Inductive Kickback — no flyback diode across inductive load ────────
+  // When an inductive load is switched off its magnetic field collapses and
+  // generates a large reverse-polarity voltage spike (can exceed 100 V) that
+  // destroys the switching transistor or MCU GPIO driving it.
+  const INDUCTIVE_TYPES  = new Set(["Motor", "Buzzer", "Relay", "Solenoid"]);
+  const FLYBACK_TYPES    = new Set(["Diode", "SchottkyDiode", "TVSDiode"]);
+
+  for (const [inductId, inductComp] of components) {
+    if (!INDUCTIVE_TYPES.has(inductComp.type)) continue;
+
+    // Collect every node (net or component) this inductive load connects to
+    const inductNeighbors = new Set<string>();
+    for (const conn of connections) {
+      if (conn.from === inductId) inductNeighbors.add(conn.to);
+      if (conn.to   === inductId) inductNeighbors.add(conn.from);
+    }
+    if (inductNeighbors.size === 0) continue;
+
+    // A flyback diode is "in parallel" when its anode AND cathode both connect
+    // to nodes that are also neighbors of the inductive load (≥2 shared nodes).
+    let hasParallelFlyback = false;
+    for (const [dId, dComp] of components) {
+      if (!FLYBACK_TYPES.has(dComp.type)) continue;
+
+      const diodeNeighbors = new Set<string>();
+      for (const conn of connections) {
+        if (conn.from === dId) diodeNeighbors.add(conn.to);
+        if (conn.to   === dId) diodeNeighbors.add(conn.from);
+      }
+
+      let overlap = 0;
+      for (const n of diodeNeighbors) {
+        if (inductNeighbors.has(n)) overlap++;
+      }
+      if (overlap >= 2) { hasParallelFlyback = true; break; }
+    }
+
+    if (!hasParallelFlyback) {
+      errors.push({
+        line: inductComp.line, column: 1,
+        message: `E012: '${inductId}' (${inductComp.type}) has no flyback diode in parallel. When switched off its collapsing magnetic field generates a destructive voltage spike — add a Schottky diode (cathode to +, anode to −) across the load to clamp the kickback.`,
+        errorCode: "E012", severity: "error", sourceLine: "",
+      });
+    }
+  }
+
+  // ── E013: Inverted Polarity — ground/power net on wrong-named IC pin ─────────
+  // Catches cases where a user swaps VCC and GND connections by pin name even
+  // when the pin's declared type is passive/analog (not caught by E001).
+  // Avoid double-flagging with E001 by only firing when pin type ≠ power/ground.
+  const POWER_PIN_RE  = /^(vcc|vdd|v\+|vbat|avcc|dvcc|vccio|vin)$/i;
+  const GROUND_PIN_RE = /^(gnd|vss|v-|agnd|pgnd|sgnd|dgnd)$/i;
+
+  for (const conn of connections) {
+    const fromNet  = nets.get(conn.from);
+    const toNet    = nets.get(conn.to);
+    const fromComp = components.get(conn.from);
+    const toComp   = components.get(conn.to);
+    const srcLine  = sourceLines[conn.line - 1] ?? "";
+
+    // power net → ground-named component pin (only passive/analog — E001 handles typed pins)
+    if (fromNet?.type === "power" && toComp) {
+      const toPin = toComp.pins.find((p) => p.name === conn.toPin);
+      if (GROUND_PIN_RE.test(conn.toPin) && toPin && toPin.type !== "ground") {
+        errors.push({
+          line: conn.line, column: 1,
+          message: `E013: Reverse polarity! Power net '${conn.from}' (${fromNet.voltage ?? "?"}V) is wired to '${conn.to}.${conn.toPin}' which is a ground/negative pin. This will instantly destroy the IC — swap the power and ground connections.`,
+          errorCode: "E013", severity: "fatal", sourceLine: srcLine,
+        });
+      }
+    }
+
+    // ground net → power-named component pin
+    if (fromNet?.type === "ground" && toComp) {
+      const toPin = toComp.pins.find((p) => p.name === conn.toPin);
+      if (POWER_PIN_RE.test(conn.toPin) && toPin && toPin.type !== "power") {
+        errors.push({
+          line: conn.line, column: 1,
+          message: `E013: Reverse polarity! Ground net '${conn.from}' is wired to '${conn.to}.${conn.toPin}' which is a power/positive pin. This will instantly destroy the IC — swap the power and ground connections.`,
+          errorCode: "E013", severity: "fatal", sourceLine: srcLine,
+        });
+      }
+    }
+
+    // component ground-named pin → power net
+    if (fromComp && toNet?.type === "power") {
+      const fromPin = fromComp.pins.find((p) => p.name === conn.fromPin);
+      if (GROUND_PIN_RE.test(conn.fromPin) && fromPin && fromPin.type !== "ground") {
+        errors.push({
+          line: conn.line, column: 1,
+          message: `E013: Reverse polarity! Pin '${conn.from}.${conn.fromPin}' (ground pin) is wired to power net '${conn.to}' (${toNet.voltage ?? "?"}V). This will instantly destroy the IC — swap the connections.`,
+          errorCode: "E013", severity: "fatal", sourceLine: srcLine,
+        });
+      }
+    }
+
+    // component power-named pin → ground net
+    if (fromComp && toNet?.type === "ground") {
+      const fromPin = fromComp.pins.find((p) => p.name === conn.fromPin);
+      if (POWER_PIN_RE.test(conn.fromPin) && fromPin && fromPin.type !== "power") {
+        errors.push({
+          line: conn.line, column: 1,
+          message: `E013: Reverse polarity! Pin '${conn.from}.${conn.fromPin}' (power pin) is wired to ground net '${conn.to}'. This will instantly destroy the IC — swap the connections.`,
+          errorCode: "E013", severity: "fatal", sourceLine: srcLine,
+        });
+      }
+    }
+  }
+
   // ── E009: Transistor base connected without current-limiting resistor ────────
   // Rule 1a: base wired directly to a power net → transistor burns immediately.
   // Rule 1b: base wired directly to an MCU GPIO with no resistor in series →

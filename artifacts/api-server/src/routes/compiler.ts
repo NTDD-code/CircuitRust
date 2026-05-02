@@ -76,6 +76,36 @@ router.post("/compiler/compile", (req, res) => {
         line: err.line,
       });
     }
+    // E011 — logic contention: two MCU GPIO pins directly connected
+    if (err.errorCode === "E011") {
+      safetyIssues.push({
+        severity: "DANGER",
+        code: "S008",
+        message: "Logic contention detected! Connecting two output pins directly can damage the internal circuitry of the MCU.",
+        detail: err.message,
+        line: err.line,
+      });
+    }
+    // E012 — inductive load with no flyback diode
+    if (err.errorCode === "E012") {
+      safetyIssues.push({
+        severity: "CRITICAL",
+        code: "S009",
+        message: "Missing flyback diode! Inductive kickback will destroy your transistor or MCU pin.",
+        detail: err.message,
+        line: err.line,
+      });
+    }
+    // E013 — inverted polarity on IC power/ground pin
+    if (err.errorCode === "E013") {
+      safetyIssues.push({
+        severity: "FATAL",
+        code: "S010",
+        message: "Reverse polarity detected! This will instantly destroy the IC.",
+        detail: err.message,
+        line: err.line,
+      });
+    }
     // E009 — transistor base without current-limiting resistor
     if (err.errorCode === "E009") {
       safetyIssues.push({
@@ -337,6 +367,59 @@ let vcc = Net::power(5.0);
 let gnd = Net::ground();
 
 connect!(vcc => gnd);`,
+  },
+  {
+    name: "Logic Contention (E011)",
+    description: "Two MCU GPIO pins wired directly — triggers DANGER logic contention warning",
+    source: `// DANGER: Arduino d3 and ESP32 gpio0 directly wired without a resistor
+let vcc5  = Net::power(5.0);
+let vcc33 = Net::power(3.3);
+let gnd   = Net::ground();
+
+let ard = Component::ArduinoUno;
+let esp = Component::ESP32;
+
+connect!(vcc5  => ard.vcc);
+connect!(gnd   => ard.gnd);
+connect!(vcc33 => esp.vcc);
+connect!(gnd   => esp.gnd);
+
+// E011: direct GPIO-to-GPIO connection — logic contention when both are outputs
+connect!(ard.d3 => esp.gpio0);`,
+  },
+  {
+    name: "Inductive Kickback (E012)",
+    description: "Relay coil driven without a flyback diode — triggers CRITICAL kickback warning",
+    source: `// CRITICAL: Relay without flyback diode — transistor will be destroyed by kickback
+let vcc = Net::power(5.0);
+let gnd = Net::ground();
+
+let ard    = Component::ArduinoUno;
+let r_base = Component::Resistor { resistance: "10000" };
+let q1     = Component::NPN     { model: "2N2222" };
+let relay1 = Component::Relay;
+
+connect!(vcc => ard.vcc);
+connect!(gnd => ard.gnd);
+connect!(ard.d4 => r_base.pin1);
+connect!(r_base.pin2 => q1.base);
+connect!(vcc => relay1.coil_a);
+connect!(relay1.coil_b => q1.collector);
+connect!(q1.emitter    => gnd);
+// Fix: add connect!(vcc => d1.cathode); connect!(d1.anode => q1.collector); using SchottkyDiode`,
+  },
+  {
+    name: "Inverted Polarity (E013)",
+    description: "Ground net wired to buzzer VCC pin — triggers FATAL reverse polarity error",
+    source: `// FATAL: Buzzer connected backwards — VCC to GND pin, GND to VCC pin
+let vcc = Net::power(5.0);
+let gnd = Net::ground();
+
+let bz1 = Component::Buzzer;
+
+// E013: reversed! ground to power pin, power to ground pin
+connect!(gnd => bz1.vcc);
+connect!(vcc => bz1.gnd);`,
   },
   {
     name: "Transistor Burn Scenarios",
