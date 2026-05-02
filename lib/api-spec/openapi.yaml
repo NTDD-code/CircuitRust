@@ -3,13 +3,17 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Strict Circuit Compiler API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: compiler
+    description: Circuit compiler operations
+  - name: llm
+    description: LLM circuit analysis
 paths:
   /healthz:
     get:
@@ -24,6 +28,61 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /compiler/compile:
+    post:
+      operationId: compileCircuit
+      tags: [compiler]
+      summary: Compile a circuit definition
+      description: Parse, validate, and compile a Rust-inspired circuit definition
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompileRequest"
+      responses:
+        "200":
+          description: Compilation result (may include errors)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompileResult"
+
+  /compiler/examples:
+    get:
+      operationId: getExamples
+      tags: [compiler]
+      summary: Get example circuit definitions
+      description: Returns a list of pre-built example circuits
+      responses:
+        "200":
+          description: List of example circuits
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExampleList"
+
+  /llm/analyze:
+    post:
+      operationId: analyzeCircuitSafety
+      tags: [llm]
+      summary: Analyze circuit safety with LLM
+      description: Use an LLM (Gemma 2B) to analyze circuit safety and provide recommendations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LlmAnalyzeRequest"
+      responses:
+        "200":
+          description: LLM safety analysis result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LlmAnalyzeResult"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +93,234 @@ components:
       required:
         - status
 
+    CompileRequest:
+      type: object
+      properties:
+        source:
+          type: string
+          description: Rust-inspired circuit definition source code
+      required:
+        - source
+
+    CompileResult:
+      type: object
+      properties:
+        success:
+          type: boolean
+        errors:
+          type: array
+          items:
+            $ref: "#/components/schemas/CompileError"
+        warnings:
+          type: array
+          items:
+            $ref: "#/components/schemas/CompileWarning"
+        netlist:
+          $ref: "#/components/schemas/Netlist"
+      required:
+        - success
+        - errors
+        - warnings
+
+    CompileError:
+      type: object
+      properties:
+        line:
+          type: integer
+        column:
+          type: integer
+        message:
+          type: string
+        errorCode:
+          type: string
+        severity:
+          type: string
+          enum: [error, fatal]
+      required:
+        - line
+        - column
+        - message
+        - errorCode
+        - severity
+
+    CompileWarning:
+      type: object
+      properties:
+        line:
+          type: integer
+        column:
+          type: integer
+        message:
+          type: string
+        warningCode:
+          type: string
+      required:
+        - line
+        - column
+        - message
+        - warningCode
+
+    Netlist:
+      type: object
+      properties:
+        components:
+          type: array
+          items:
+            $ref: "#/components/schemas/NetlistComponent"
+        connections:
+          type: array
+          items:
+            $ref: "#/components/schemas/NetlistConnection"
+        nets:
+          type: array
+          items:
+            $ref: "#/components/schemas/Net"
+      required:
+        - components
+        - connections
+        - nets
+
+    NetlistComponent:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+        pins:
+          type: array
+          items:
+            $ref: "#/components/schemas/Pin"
+        properties:
+          type: object
+          additionalProperties:
+            type: string
+      required:
+        - id
+        - name
+        - type
+        - pins
+
+    Pin:
+      type: object
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          enum: [power, ground, signal, analog, digital, bidirectional]
+        net:
+          type: string
+      required:
+        - name
+        - type
+
+    NetlistConnection:
+      type: object
+      properties:
+        from:
+          type: string
+        fromPin:
+          type: string
+        to:
+          type: string
+        toPin:
+          type: string
+        net:
+          type: string
+      required:
+        - from
+        - fromPin
+        - to
+        - toPin
+        - net
+
+    Net:
+      type: object
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          enum: [power, ground, signal]
+        voltage:
+          type: number
+      required:
+        - name
+        - type
+
+    ExampleList:
+      type: object
+      properties:
+        examples:
+          type: array
+          items:
+            $ref: "#/components/schemas/Example"
+      required:
+        - examples
+
+    Example:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        source:
+          type: string
+      required:
+        - name
+        - description
+        - source
+
+    LlmAnalyzeRequest:
+      type: object
+      properties:
+        source:
+          type: string
+        netlist:
+          $ref: "#/components/schemas/Netlist"
+      required:
+        - source
+
+    LlmAnalyzeResult:
+      type: object
+      properties:
+        safetyScore:
+          type: integer
+          minimum: 0
+          maximum: 100
+        analysis:
+          type: string
+        risks:
+          type: array
+          items:
+            $ref: "#/components/schemas/RiskItem"
+        suggestions:
+          type: array
+          items:
+            type: string
+        model:
+          type: string
+      required:
+        - safetyScore
+        - analysis
+        - risks
+        - suggestions
+        - model
+
+    RiskItem:
+      type: object
+      properties:
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+        description:
+          type: string
+        component:
+          type: string
+      required:
+        - severity
+        - description
