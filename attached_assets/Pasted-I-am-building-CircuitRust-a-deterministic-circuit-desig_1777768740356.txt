@@ -1,0 +1,28 @@
+I am building CircuitRust, a deterministic circuit design and validation engine. It treats hardware as code, applying Rust-like safety principles to prevent short circuits and voltage mismatches. The goal is to "compile" a circuit and export it to professional EDA tools like KiCad or Proteus.
+​Task: Enhance the existing Replit application with the following core modules:
+​1. The "Strict Compiler" Engine (Logic):
+​Implement a validation layer that checks the circuit netlist against a set of rules:
+​E001 (Short Circuit): Detect if VCC and GND are tied without a load.
+​E006 (Type Mismatch): Warning/Error if an Analog Output is connected to a High-Speed Digital Input without isolation.
+​E007 (Voltage Mismatch): Error if a 5V output drives a 3.3V sensitive pin (e.g., ESP32/STM32 logic levels).
+​W005 (Floating Pin): Warn if an IC input pin is not pulled high/low or connected.
+​W009 (Missing Decoupling): Suggest a 0.1uF capacitor for every VCC pin of an Integrated Circuit.
+​2. Component Metadata & Footprint Mapping:
+​Extend the component library to include metadata:
+​pins: Array of objects (Name, Type: Power/Digital/Analog/Passive, MaxVoltage).
+​footprint: Default KiCad footprint (e.g., Resistor_SMD:R_0603_1608Metric).
+​Ensure every component in the UI categories (Microcontrollers, ICs, Transistors, etc.) maps to a real-world footprint.
+​3. The Exporter Module:
+​Build a function to transform the internal circuit state into a KiCad .net (Netlist) file format.
+​Add an option to export a basic Proteus-compatible connection list.
+​The export should include: Component designators (R1, C1, U1), Values, and Footprints.
+​4. AI Assistant Integration (Vibe Coding):
+​Refine the "AI Circuit Assistant" to act as a Linter.
+​When the user describes a circuit or provides code, the AI should not just "write code" but "audit" it for electrical stability and best practices (e.g., "Add a flyback diode for this motor").
+​5. UI/UX Refinement:
+​Compiler Console: A terminal-style output at the bottom that shows "Compiling..." and lists Errors in Red and Warnings in Yellow (exactly like the cargo output in Rust).
+​Live Preview: A simplified node-graph or a list-view of the current netlist being built.
+​Tech Stack Guidance:
+​Use a structured JSON or YAML format for the internal "Circuit-as-Code" representation.
+​Ensure the UI remains fast, dark-themed, and developer-centric.
+​Deliverable: A functional "Compile to KiCad" button and a real-time validation console that catches the errors mentioned above.
