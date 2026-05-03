@@ -5,6 +5,35 @@ function toRefId(name: string): string {
   return name.toUpperCase().replace(/[^A-Z0-9_]/g, "_");
 }
 
+// ── Sequential RefDes (R1, D1, U1, Q1 …) ─────────────────────────────────────
+const REFDES_PREFIX: Record<string, string> = {
+  Resistor: "R", PhotoResistor: "R", Thermistor: "R",
+  Capacitor: "C",
+  Inductor: "L", Transformer: "T",
+  LED: "D", Diode: "D", ZenerDiode: "D", SchottkyDiode: "D", TVSDiode: "D",
+  NPN: "Q", PNP: "Q", NMOSFET: "Q", PMOSFET: "Q",
+  OpAmp741: "U", OpAmpTL082: "U", OpAmpLM358: "U",
+  VoltageRegulator: "U", LDO: "U", BuckConverter: "U", BoostConverter: "U",
+  LevelShifter: "U", IC: "U",
+  DHT11: "U", DHT22: "U", MPU6050: "U", Ultrasonic: "US", IRSensor: "U",
+  ArduinoUno: "MCU", ArduinoNano: "MCU", ESP32: "MCU", ESP8266: "MCU",
+  RaspberryPiPico: "MCU", STM32: "MCU",
+  Button: "SW", Switch: "SW",
+  Crystal: "Y", Buzzer: "BZ", Motor: "M", Relay: "K", Solenoid: "L",
+};
+
+function buildRefDesMap(components: NetlistComponent[]): Map<string, string> {
+  const counters = new Map<string, number>();
+  const refMap   = new Map<string, string>();
+  for (const comp of components) {
+    const prefix = REFDES_PREFIX[comp.type] ?? "X";
+    const count  = (counters.get(prefix) ?? 0) + 1;
+    counters.set(prefix, count);
+    refMap.set(comp.id, `${prefix}${count}`);
+  }
+  return refMap;
+}
+
 // ── KiCad footprint mapping ────────────────────────────────────────────────────
 // All entries use verified KiCad 7/8 standard library footprint IDs.
 // THT variants are preferred for hobbyist use (breadboard-friendly).
@@ -150,8 +179,9 @@ export function exportKicadNetlist(netlist: Netlist, title: string = "circuit"):
   lines.push(`  )`);
   lines.push(`  (components`);
 
+  const refMap = buildRefDesMap(netlist.components);
   for (const comp of netlist.components) {
-    const ref      = toRefId(comp.name);
+    const ref      = refMap.get(comp.id) ?? toRefId(comp.name);
     const props    = comp.properties ?? {};
     const value    = props["resistance"] ?? props["capacitance"] ?? props["inductance"]
                   ?? props["model"] ?? comp.type;
@@ -176,8 +206,8 @@ export function exportKicadNetlist(netlist: Netlist, title: string = "circuit"):
     const fromIsComp = netlist.components.some((c) => c.id === conn.from);
     const toIsComp   = netlist.components.some((c) => c.id === conn.to);
 
-    const fromRef    = toRefId(conn.from);
-    const toRef      = toRefId(conn.to);
+    const fromRef    = refMap.get(conn.from) ?? toRefId(conn.from);
+    const toRef      = refMap.get(conn.to)   ?? toRefId(conn.to);
     const fromComp   = netlist.components.find((c) => c.id === conn.from);
     const toComp     = netlist.components.find((c) => c.id === conn.to);
     const fromPinNum = fromComp?.pins.find((p) => p.name === conn.fromPin)?.pinNumber?.toString() ?? conn.fromPin;
@@ -220,8 +250,9 @@ export function exportProteusNetlist(netlist: Netlist, title: string = "circuit"
   lines.push(`* Generated: ${now}`);
   lines.push(``);
   lines.push(`[COMPONENTS]`);
+  const refMapP = buildRefDesMap(netlist.components);
   for (const comp of netlist.components) {
-    const ref   = toRefId(comp.name);
+    const ref   = refMapP.get(comp.id) ?? toRefId(comp.name);
     const props = comp.properties ?? {};
     const value = props["resistance"] ?? props["capacitance"] ?? props["model"] ?? comp.type;
     const lib   = KICAD_LIBSOURCE[comp.type];
@@ -235,8 +266,8 @@ export function exportProteusNetlist(netlist: Netlist, title: string = "circuit"
   for (const conn of netlist.connections) {
     const fromIsComp = netlist.components.some((c) => c.id === conn.from);
     const toIsComp   = netlist.components.some((c) => c.id === conn.to);
-    const fromRef    = toRefId(conn.from);
-    const toRef      = toRefId(conn.to);
+    const fromRef    = refMapP.get(conn.from) ?? toRefId(conn.from);
+    const toRef      = refMapP.get(conn.to)   ?? toRefId(conn.to);
     const fromComp   = netlist.components.find((c) => c.id === conn.from);
     const toComp     = netlist.components.find((c) => c.id === conn.to);
     const fromPinNum = fromComp?.pins.find((p) => p.name === conn.fromPin)?.pinNumber?.toString() ?? conn.fromPin;
@@ -322,8 +353,10 @@ export function exportSpiceNetlist(netlist: Netlist, title: string = "circuit"):
 
   lines.push(`* Components`);
 
+  const refMapS = buildRefDesMap(netlist.components);
   for (const comp of netlist.components) {
-    const ref   = toRefId(comp.name);
+    const fullRef = refMapS.get(comp.id) ?? toRefId(comp.name);
+    const ref     = fullRef.replace(/^[A-Za-z]+/, "");
     const props = comp.properties ?? {};
     const fi    = { n: 0 };
 

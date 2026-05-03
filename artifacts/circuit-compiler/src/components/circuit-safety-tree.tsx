@@ -5,6 +5,14 @@ import {
 } from "lucide-react";
 import type { Netlist } from "@workspace/api-client-react";
 
+const BLINK_STYLE = `
+  @keyframes pin-blink {
+    0%,100% { background: rgba(248,81,73,0.08); }
+    50%      { background: rgba(248,81,73,0.22); }
+  }
+  .pin-error-blink { animation: pin-blink 1.1s ease-in-out infinite; }
+`;
+
 // ── Domain types ─────────────────────────────────────────────────────────────
 
 type Status = "ok" | "warning" | "error";
@@ -226,6 +234,7 @@ export function CircuitSafetyTree({
       className="h-full overflow-auto font-mono text-[11px]"
       style={{ background: "#0D1117", color: "#C9D1D9" }}
     >
+      <style>{BLINK_STYLE}</style>
       {/* ── Sticky header ── */}
       <div
         className="sticky top-0 z-10 flex items-center gap-3 px-3 h-7 border-b"
@@ -384,15 +393,19 @@ export function CircuitSafetyTree({
                     : pin.type === "ground" ? "#6b7280"
                     : "#8B949E";
 
+                  const connectedLabel = pin.net && pin.netVoltage != null
+                    ? `Connected (${pin.netVoltage}V)`
+                    : null;
+
                   return (
                     <div
                       key={pin.name}
-                      className="flex items-center gap-1.5 h-6 pr-3"
+                      className={`flex items-center gap-1.5 h-6 pr-3${pin.status === "error" ? " pin-error-blink" : ""}`}
                       style={{
                         paddingLeft: "28px",
                         background:
                           pin.status === "error"
-                            ? "#3D0A0A22"
+                            ? undefined
                             : pin.status === "warning"
                             ? "#2D220022"
                             : "transparent",
@@ -422,9 +435,9 @@ export function CircuitSafetyTree({
                       <span
                         className="text-[10px] truncate"
                         style={{ color: connColor, maxWidth: "220px" }}
-                        title={connLabel}
+                        title={connectedLabel ?? connLabel}
                       >
-                        {connLabel}
+                        {connectedLabel ?? connLabel}
                       </span>
 
                       {/* Issue code badge */}

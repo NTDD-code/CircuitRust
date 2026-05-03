@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import {
   useCompileCircuit,
   useExportNetlist,
@@ -42,6 +42,8 @@ import { BomPanel } from "@/components/bom-panel";
 import { NetlistView } from "@/components/netlist-view";
 import { loadAiSettings, saveAiSettings, getProviderLabel, isProviderConfigured, type AiProviderSettings } from "@/lib/ai-provider";
 import { generateFix, FIX_LABELS } from "@/lib/safety-fix";
+import { HealthGauge } from "@/components/health-gauge";
+import { calculateHealthScore, playCompileSound } from "@/lib/health-score";
 import type { SafetyIssue } from "@workspace/api-client-react";
 
 type LucideIcon = ForwardRefExoticComponent<Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>>;
@@ -73,8 +75,10 @@ export default function Home() {
   const [applyingFix, setApplyingFix] = useState<string | null>(null);
   const [appliedFix, setAppliedFix] = useState<string | null>(null);
   const [focusedComponent, setFocusedComponent] = useState<string | null>(null);
+  const [showSuccess, setShowSuccess] = useState(false);
 
-  const insertTextRef = useRef<((text: string) => void) | null>(null);
+  const insertTextRef     = useRef<((text: string) => void) | null>(null);
+  const handleCompileRef  = useRef<() => void>(() => {});
 
   const compileMutation = useCompileCircuit();
   const exportMutation = useExportNetlist();
@@ -91,6 +95,7 @@ export default function Home() {
         onSuccess: (result) => {
           setCompileResult(result);
           setFocusedComponent(null);
+          playCompileSound(result.success);
           if (result.success && result.netlist) {
             setOutputTab("tree");
           }
@@ -177,6 +182,7 @@ export default function Home() {
             setCompileResult(r);
             setApplyingFix(null);
             setAppliedFix(issue.code);
+            playCompileSound(r.success);
             if (r.success && r.netlist) setOutputTab("tree");
             // Clear the "applied" tick after 3 s
             setTimeout(() => setAppliedFix(null), 3000);
@@ -185,6 +191,29 @@ export default function Home() {
       );
     }, 250);
   }, [source, compileMutation]);
+
+  // Keep ref in sync so debounce always calls latest handleCompile
+  useEffect(() => { handleCompileRef.current = handleCompile; }, [handleCompile]);
+
+  // Auto-compile: 1.5 s debounce after every keystroke
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!compileMutation.isPending) handleCompileRef.current();
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [source]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const healthScore = useMemo(
+    () => (compileResult ? calculateHealthScore(compileResult) : null),
+    [compileResult],
+  );
+
+  useEffect(() => {
+    if (healthScore !== 100) return;
+    setShowSuccess(true);
+    const t = setTimeout(() => setShowSuccess(false), 4500);
+    return () => clearTimeout(t);
+  }, [healthScore]);
 
   const providerConfigured = isProviderConfigured(aiSettings);
   const providerLabel = getProviderLabel(aiSettings);
@@ -225,6 +254,13 @@ export default function Home() {
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Health Gauge */}
+            {healthScore !== null && (
+              <HealthGauge score={healthScore} />
+            )}
+
+            <div className="w-px h-5" style={{ background: "#30363D" }} />
+
             {/* Provider badge */}
             <button
               onClick={toggleProvider}
@@ -342,6 +378,24 @@ export default function Home() {
             </Button>
           </div>
         </header>
+
+        {/* ── Success toast ── */}
+        {showSuccess && (
+          <div className="fixed top-14 inset-x-0 flex justify-center z-50 pointer-events-none">
+            <div
+              className="flex items-center gap-3 px-5 py-2.5 rounded-lg font-mono text-sm animate-pulse"
+              style={{
+                background: "#0D3320",
+                border:     "1px solid #3FB950",
+                color:      "#3FB950",
+                boxShadow:  "0 4px 24px rgba(63,185,80,0.3)",
+              }}
+            >
+              <ShieldCheck className="w-4 h-4 shrink-0" />
+              Circuit is Safe to Build! · Health Score: 100%
+            </div>
+          </div>
+        )}
 
         {/* ── Main 3-panel body ── */}
         <div className="flex flex-1 min-h-0">
