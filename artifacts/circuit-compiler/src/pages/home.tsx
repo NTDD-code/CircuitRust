@@ -128,6 +128,9 @@ export default function Home() {
   const [showSuccess, setShowSuccess] = useState(false);
   const [bundleLoading, setBundleLoading] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [savedAt, setSavedAt] = useState<Date | null>(() => {
+    return localStorage.getItem("scc_last_source") !== null ? new Date() : null;
+  });
 
   // ── HECATE Vision state ─────────────────────────────────────────────────────
   const [hecateOpen, setHecateOpen]       = useState(false);
@@ -359,6 +362,8 @@ export default function Home() {
     setShowSuccess(false);
     setOutputTab("output");
     setCopiedKey(null);
+    setSavedAt(null);
+    localStorage.removeItem("scc_last_source");
   }, []);
 
   // ── Copy error / warning text to clipboard ──────────────────────────────────
@@ -461,6 +466,15 @@ export default function Home() {
       setBundleLoading(false);
     }
   }, [compileResult, exportMutation]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Auto-save: persist source to localStorage 800 ms after last keystroke ──
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      localStorage.setItem("scc_last_source", source);
+      setSavedAt(new Date());
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [source]);
 
   // Keep ref in sync so debounce always calls latest handleCompile
   useEffect(() => { handleCompileRef.current = handleCompile; }, [handleCompile]);
@@ -1358,6 +1372,15 @@ export default function Home() {
             )}
           </div>
           <div className="flex items-center gap-3">
+            {savedAt && (
+              <>
+                <span style={{ color: "#3C4450" }}>·</span>
+                <span style={{ color: "#3FB95080" }}>
+                  ● saved {savedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                </span>
+              </>
+            )}
+            <span style={{ color: "#3C4450" }}>·</span>
             <span>circuit-dsl</span>
             <span style={{ color: "#3C4450" }}>·</span>
             <span>{source.split("\n").length} lines</span>
