@@ -50,6 +50,23 @@ export const CompileCircuitResponse = zod.object({
       detail: zod.string().optional(),
     }),
   ),
+  testResults: zod
+    .array(
+      zod.object({
+        description: zod.string(),
+        passed: zod.boolean(),
+        assertions: zod.array(
+          zod.object({
+            code: zod.string(),
+            passed: zod.boolean(),
+            message: zod.string(),
+            expected: zod.string().optional(),
+            actual: zod.string().optional(),
+          }),
+        ),
+      }),
+    )
+    .optional(),
   netlist: zod
     .object({
       components: zod.array(

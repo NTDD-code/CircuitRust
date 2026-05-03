@@ -207,6 +207,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/SafetyIssue"
+        testResults:
+          type: array
+          items:
+            $ref: "#/components/schemas/TestResult"
         netlist:
           $ref: "#/components/schemas/Netlist"
       required:
@@ -214,6 +218,40 @@ components:
         - errors
         - warnings
         - safetyIssues
+
+    TestResult:
+      type: object
+      properties:
+        description:
+          type: string
+        passed:
+          type: boolean
+        assertions:
+          type: array
+          items:
+            $ref: "#/components/schemas/AssertionResult"
+      required:
+        - description
+        - passed
+        - assertions
+
+    AssertionResult:
+      type: object
+      properties:
+        code:
+          type: string
+        passed:
+          type: boolean
+        message:
+          type: string
+        expected:
+          type: string
+        actual:
+          type: string
+      required:
+        - code
+        - passed
+        - message
 
     SafetyIssue:
       type: object

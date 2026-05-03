@@ -9,6 +9,7 @@
 export * from "./aiChatRequest";
 export * from "./aiChatRequestProvider";
 export * from "./aiChatResult";
+export * from "./assertionResult";
 export * from "./compileError";
 export * from "./compileErrorSeverity";
 export * from "./compileRequest";
@@ -44,3 +45,4 @@ export * from "./riskItem";
 export * from "./riskItemSeverity";
 export * from "./safetyIssue";
 export * from "./safetyIssueSeverity";
+export * from "./testResult";

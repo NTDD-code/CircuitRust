@@ -5,6 +5,7 @@ import { validateCircuit } from "../lib/circuit-validator.js";
 import { buildNetlist } from "../lib/circuit-netlist.js";
 import { exportKicadNetlist, exportProteusNetlist, exportSpiceNetlist } from "../lib/circuit-exporter.js";
 import { COMPONENT_DEFS } from "../lib/circuit-parser.js";
+import { stripTestBlocks, runTests } from "../lib/circuit-tester.js";
 
 const router = Router();
 
@@ -18,7 +19,9 @@ router.post("/compiler/compile", (req, res) => {
   const { source } = parsed.data;
   const sourceLines = source.split("\n");
 
-  const parseResult = parseCircuit(source);
+  // Strip test{} blocks before parsing — they're executed separately below
+  const cleanSource = stripTestBlocks(source);
+  const parseResult = parseCircuit(cleanSource);
   const validationResult = validateCircuit(
     parseResult.components,
     parseResult.connections,
@@ -151,6 +154,9 @@ router.post("/compiler/compile", (req, res) => {
     }
   }
 
+  // ── Test Suite execution ───────────────────────────────────────────────────
+  const testResults = netlist ? runTests(source, netlist) : [];
+
   res.json({
     success,
     errors: allErrors.map((e) => ({
@@ -160,6 +166,7 @@ router.post("/compiler/compile", (req, res) => {
       line: w.line, column: w.column, message: w.message, warningCode: w.warningCode,
     })),
     safetyIssues,
+    testResults,
     ...(netlist ? { netlist } : {}),
   });
 });

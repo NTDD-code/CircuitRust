@@ -16,4 +16,5 @@ export const ComponentInfoCategory = {
   sensor: "sensor",
   module: "module",
   power: "power",
+  actuator: "actuator",
 } as const;

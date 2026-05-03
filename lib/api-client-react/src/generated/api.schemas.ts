@@ -55,6 +55,20 @@ export interface SafetyIssue {
   detail?: string;
 }
 
+export interface AssertionResult {
+  code: string;
+  passed: boolean;
+  message: string;
+  expected?: string;
+  actual?: string;
+}
+
+export interface TestResult {
+  description: string;
+  passed: boolean;
+  assertions: AssertionResult[];
+}
+
 export type NetlistComponentCategory =
   (typeof NetlistComponentCategory)[keyof typeof NetlistComponentCategory];
 
@@ -65,6 +79,7 @@ export const NetlistComponentCategory = {
   sensor: "sensor",
   module: "module",
   power: "power",
+  actuator: "actuator",
 } as const;
 
 export type PinType = (typeof PinType)[keyof typeof PinType];
@@ -128,6 +143,7 @@ export const NetType = {
   power: "power",
   ground: "ground",
   signal: "signal",
+  nc: "nc",
 } as const;
 
 export interface Net {
@@ -147,6 +163,7 @@ export interface CompileResult {
   errors: CompileError[];
   warnings: CompileWarning[];
   safetyIssues: SafetyIssue[];
+  testResults?: TestResult[];
   netlist?: Netlist;
 }
 
@@ -170,6 +187,7 @@ export const ComponentInfoCategory = {
   sensor: "sensor",
   module: "module",
   power: "power",
+  actuator: "actuator",
 } as const;
 
 export interface ComponentInfo {

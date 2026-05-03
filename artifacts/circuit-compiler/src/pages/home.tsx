@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import JSZip from "jszip";
 import {
   useCompileCircuit,
   useExportNetlist,
@@ -8,6 +9,7 @@ import {
   getGetComponentLibraryQueryKey,
   type CompileResult,
   type LlmAnalyzeResult,
+  type NetlistComponent,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,6 +33,8 @@ import {
   Network,
   Cpu,
   List,
+  Package,
+  FlaskConical,
 } from "lucide-react";
 import { SplashScreen } from "@/components/splash-screen";
 import { CircuitEditor } from "@/components/circuit-editor";
@@ -49,7 +53,33 @@ import type { SafetyIssue } from "@workspace/api-client-react";
 type LucideIcon = ForwardRefExoticComponent<Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>>;
 type OutputTabDef = { id: OutputTab; icon: LucideIcon; label: string; disabled?: boolean };
 
-const INITIAL_SOURCE = `// Simple LED circuit with current-limiting resistor
+// ── Frontend RefDes helper (mirrors backend circuit-exporter logic) ─────────
+const REFDES_PFX: Record<string, string> = {
+  Resistor:"R",PhotoResistor:"R",Thermistor:"R",Capacitor:"C",Inductor:"L",Transformer:"T",
+  LED:"D",Diode:"D",ZenerDiode:"D",SchottkyDiode:"D",TVSDiode:"D",
+  NPN:"Q",PNP:"Q",NMOSFET:"Q",PMOSFET:"Q",
+  OpAmp741:"U",OpAmpTL082:"U",OpAmpLM358:"U",VoltageRegulator:"U",LDO:"U",
+  BuckConverter:"U",BoostConverter:"U",LevelShifter:"U",IC:"U",
+  DHT11:"U",DHT22:"U",MPU6050:"U",Ultrasonic:"US",IRSensor:"U",
+  ArduinoUno:"MCU",ArduinoNano:"MCU",ESP32:"MCU",ESP8266:"MCU",
+  RaspberryPiPico:"MCU",STM32:"MCU",
+  Button:"SW",Switch:"SW",Crystal:"Y",Buzzer:"BZ",Motor:"M",Relay:"K",Solenoid:"L",
+};
+const BOM_PACKAGES: Record<string, string> = {
+  Resistor:"R_Axial_DIN0207",Capacitor:"C_Disc_D5.0mm",Inductor:"L_Axial",
+  LED:"LED_D5.0mm",Diode:"D_DO-41",ZenerDiode:"D_DO-35",SchottkyDiode:"D_DO-35",
+  NPN:"TO-92_Inline",PNP:"TO-92_Inline",NMOSFET:"TO-220-3",PMOSFET:"TO-220-3",
+  ArduinoUno:"Arduino_UNO_THT",ArduinoNano:"Arduino_Nano",ESP32:"ESP32-WROOM",
+  OpAmp741:"DIP-8_W7.62mm",OpAmpLM358:"DIP-8_W7.62mm",VoltageRegulator:"TO-220-3",
+};
+function buildFrontendRefDesMap(comps: Pick<NetlistComponent,"id"|"type">[]): Map<string,string> {
+  const counters=new Map<string,number>(), used=new Set<string>(), map=new Map<string,string>();
+  for(const c of comps){const pfx=REFDES_PFX[c.type]??"X",m=c.id.match(new RegExp(`^${pfx}(\\d+)$`,"i"));if(m){const rd=`${pfx}${m[1]}`;map.set(c.id,rd);used.add(rd);}}
+  for(const c of comps){if(map.has(c.id))continue;const pfx=REFDES_PFX[c.type]??"X";let n=(counters.get(pfx)??0)+1;while(used.has(`${pfx}${n}`))n++;counters.set(pfx,n);used.add(`${pfx}${n}`);map.set(c.id,`${pfx}${n}`);}
+  return map;
+}
+
+const INITIAL_SOURCE = `// LED circuit with current-limiting resistor + test suite
 let vcc = Net::power(5.0);
 let gnd = Net::ground();
 
@@ -58,7 +88,20 @@ let led1 = Component::LED { color: "red" };
 
 connect!(vcc      => r1.pin1);
 connect!(r1.pin2  => led1.anode);
-connect!(led1.cathode => gnd);`;
+connect!(led1.cathode => gnd);
+
+// ── Hardware-as-Code tests ────────────────────────────────
+test "LED protection verified" {
+  assert_connected!(r1.pin2, led1.anode);
+  assert_net_exists!(vcc);
+  assert_net_exists!(gnd);
+  assert_gt!(r1.resistance, "100");
+}
+
+test "Power rails present" {
+  assert_connected!(vcc, r1.pin1);
+  assert_connected!(gnd, led1.cathode);
+}`;
 
 type OutputTab = "output" | "bom" | "netlist" | "tree";
 
@@ -76,6 +119,7 @@ export default function Home() {
   const [appliedFix, setAppliedFix] = useState<string | null>(null);
   const [focusedComponent, setFocusedComponent] = useState<string | null>(null);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [bundleLoading, setBundleLoading] = useState(false);
 
   const insertTextRef     = useRef<((text: string) => void) | null>(null);
   const handleCompileRef  = useRef<() => void>(() => {});
@@ -226,6 +270,98 @@ export default function Home() {
     }, 250);
   }, [source, compileMutation]);
 
+  // ── Production Bundle download ─────────────────────────────────────────────
+  const handleDownloadBundle = useCallback(async () => {
+    if (!compileResult?.netlist || !compileResult.success) return;
+    setBundleLoading(true);
+    try {
+      const exportResult = await exportMutation.mutateAsync({
+        data: { netlist: compileResult.netlist, format: "kicad", title: "circuit" },
+      });
+
+      // BOM CSV
+      const refMap = buildFrontendRefDesMap(compileResult.netlist.components);
+      const bomLines = [
+        "Reference,Value,Type,Package,Quantity",
+        ...compileResult.netlist.components.map((comp) => {
+          const props = (comp.properties ?? {}) as Record<string, string>;
+          const value = props.resistance ?? props.capacitance ?? props.inductance ?? props.model ?? props.color ?? comp.type;
+          const ref = refMap.get(comp.id) ?? comp.id;
+          const pkg = BOM_PACKAGES[comp.type] ?? "THT";
+          return `${ref},${value},${comp.type},${pkg},1`;
+        }),
+      ];
+      const bomCsv = bomLines.join("\n");
+
+      // Safety report
+      const tr = compileResult.testResults ?? [];
+      const testsPassed = tr.filter((t) => t.passed).length;
+      const testsTotal  = tr.length;
+      const score       = calculateHealthScore(compileResult) ?? 0;
+      const verdict     = score === 100 ? "READY FOR PROTOTYPE" : score >= 60 ? "NEEDS REVIEW" : "DO NOT BUILD";
+      const now         = new Date().toISOString().replace("T", " ").slice(0, 19) + " UTC";
+      const bar         = "█".repeat(Math.round(score / 5)) + "░".repeat(20 - Math.round(score / 5));
+      const divider     = "=".repeat(65);
+      const dash        = "-".repeat(65);
+
+      const reportLines = [
+        divider,
+        "  CIRCUIT SAFETY REPORT — CircuitRust Compiler v2.0",
+        divider,
+        "",
+        `  Generated  : ${now}`,
+        `  Source     : circuit.src`,
+        "",
+        `  HEALTH SCORE : ${score}/100  ${bar}`,
+        `  VERDICT      : ${verdict}`,
+        "",
+        `${dash.slice(0, 20)} TEST RESULTS ${"-".repeat(32)}`,
+        "",
+        testsTotal > 0
+          ? `  Tests Passed : ${testsPassed}/${testsTotal}${testsPassed === testsTotal ? " ✓ All assertions satisfied" : ""}`
+          : "  No test{} blocks defined in this circuit.",
+        "",
+        ...tr.flatMap((t) => [
+          `  [${t.passed ? "PASS" : "FAIL"}] ${t.description}`,
+          ...t.assertions.map((a) => `        ${a.passed ? "✓" : "✗"} ${a.message}`),
+          "",
+        ]),
+        `${dash.slice(0, 20)} SAFETY AUDIT ${"-".repeat(32)}`,
+        "",
+        ...(compileResult.safetyIssues ?? []).length === 0
+          ? ["  No safety issues detected. Safe to prototype."]
+          : (compileResult.safetyIssues ?? []).map((i) => `  [${i.severity}] ${i.code}: ${i.message}`),
+        "",
+        `${dash.slice(0, 20)} NETLIST SUMMARY ${"-".repeat(29)}`,
+        "",
+        `  Components  : ${compileResult.netlist.components.length}`,
+        `  Connections : ${compileResult.netlist.connections.length}`,
+        `  Nets        : ${compileResult.netlist.nets.length}`,
+        `  Power Nets  : ${compileResult.netlist.nets.filter((n) => n.type === "power").length}`,
+        `  Ground Nets : ${compileResult.netlist.nets.filter((n) => n.type === "ground").length}`,
+        "",
+        divider,
+        "  End of Report",
+        divider,
+      ];
+
+      const zip = new JSZip();
+      zip.file("circuit.net", exportResult.content);
+      zip.file("bom.csv", bomCsv);
+      zip.file("safety_report.txt", reportLines.join("\n"));
+      const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE" });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      a.href     = url;
+      a.download = "circuit_production.zip";
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
+    } finally {
+      setBundleLoading(false);
+    }
+  }, [compileResult, exportMutation]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Keep ref in sync so debounce always calls latest handleCompile
   useEffect(() => { handleCompileRef.current = handleCompile; }, [handleCompile]);
 
@@ -244,10 +380,13 @@ export default function Home() {
 
   useEffect(() => {
     if (healthScore !== 100) return;
+    const tr = compileResult?.testResults ?? [];
+    const allTestsPass = tr.length === 0 || tr.every((t) => t.passed);
+    if (!allTestsPass) return;
     setShowSuccess(true);
-    const t = setTimeout(() => setShowSuccess(false), 4500);
-    return () => clearTimeout(t);
-  }, [healthScore]);
+    const timer = setTimeout(() => setShowSuccess(false), 5000);
+    return () => clearTimeout(timer);
+  }, [healthScore, compileResult?.testResults]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const providerConfigured = isProviderConfigured(aiSettings);
   const providerLabel = getProviderLabel(aiSettings);
@@ -371,7 +510,7 @@ export default function Home() {
                   disabled={!compileResult?.success}
                   style={{ color: "#8B949E" }}
                 >
-                  {exportMutation.isPending ? (
+                  {(exportMutation.isPending || bundleLoading) ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   ) : (
                     <Download className="w-3.5 h-3.5" />
@@ -381,9 +520,22 @@ export default function Home() {
               </DropdownMenuTrigger>
               <DropdownMenuContent
                 align="end"
-                className="w-44 font-mono text-xs"
+                className="w-52 font-mono text-xs"
                 style={{ background: "#161B22", border: "1px solid #30363D" }}
               >
+                <DropdownMenuItem
+                  onClick={handleDownloadBundle}
+                  disabled={bundleLoading}
+                  className="cursor-pointer flex items-center gap-2 py-2"
+                  style={{ color: "#3FB950" }}
+                >
+                  <Package className="w-3.5 h-3.5 shrink-0" />
+                  <div>
+                    <div className="font-semibold">Production Bundle</div>
+                    <div className="text-[9px]" style={{ color: "#6E7681" }}>.net + bom.csv + safety_report</div>
+                  </div>
+                </DropdownMenuItem>
+                <div className="my-1 border-t" style={{ borderColor: "#21262D" }} />
                 <DropdownMenuItem onClick={() => handleExport("kicad")} style={{ color: "#C9D1D9" }}>
                   KiCad (.net)
                 </DropdownMenuItem>
@@ -414,22 +566,32 @@ export default function Home() {
         </header>
 
         {/* ── Success toast ── */}
-        {showSuccess && (
-          <div className="fixed top-14 inset-x-0 flex justify-center z-50 pointer-events-none">
-            <div
-              className="flex items-center gap-3 px-5 py-2.5 rounded-lg font-mono text-sm animate-pulse"
-              style={{
-                background: "#0D3320",
-                border:     "1px solid #3FB950",
-                color:      "#3FB950",
-                boxShadow:  "0 4px 24px rgba(63,185,80,0.3)",
-              }}
-            >
-              <ShieldCheck className="w-4 h-4 shrink-0" />
-              Circuit is Safe to Build! · Health Score: 100%
+        {showSuccess && (() => {
+          const tr = compileResult?.testResults ?? [];
+          const tp = tr.filter((t) => t.passed).length;
+          return (
+            <div className="fixed top-14 inset-x-0 flex justify-center z-50 pointer-events-none">
+              <div
+                className="flex items-center gap-3 px-5 py-2.5 rounded-lg font-mono text-sm"
+                style={{
+                  background: "#0D3320",
+                  border:     "1px solid #3FB950",
+                  color:      "#3FB950",
+                  boxShadow:  "0 4px 32px rgba(63,185,80,0.4)",
+                  animation:  "pulse 2s cubic-bezier(0.4,0,0.6,1) infinite",
+                }}
+              >
+                <ShieldCheck className="w-4 h-4 shrink-0" />
+                <span>Circuit is Safe to Build! · Health: <strong>100/100</strong></span>
+                {tr.length > 0 && (
+                  <span style={{ opacity: 0.9 }}>
+                    · Tests: <strong>{tp}/{tr.length}</strong> ✓
+                  </span>
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* ── Main 3-panel body ── */}
         <div className="flex flex-1 min-h-0">
@@ -561,6 +723,10 @@ export default function Home() {
                         {compileResult.errors.map((err, i) => {
                           const srcLine = srcLines[err.line - 1] ?? "";
                           const lineNum = String(err.line).padStart(4);
+                          const col0    = Math.max(0, (err.column ?? 1) - 1);
+                          // caret: spaces up to column, then ^~~~
+                          const caretPad    = " ".repeat(col0);
+                          const caretSpan   = srcLine.length > col0 ? "^" + "~".repeat(Math.min(srcLine.slice(col0).trimEnd().length - 1, 30)) : "^";
                           return (
                             <div
                               key={`e-${i}`}
@@ -573,28 +739,35 @@ export default function Home() {
                               onMouseEnter={(e) => { e.currentTarget.style.background = "#161B22"; }}
                               onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                             >
+                              {/* error[EXXX]: message */}
                               <div>
-                                <span style={{ color: "#F85149", fontWeight: "bold" }}>error</span>
+                                <span style={{ color: "#FF2D55", fontWeight: "bold" }}>error</span>
                                 <span style={{ color: "#8B949E" }}>[</span>
-                                <span style={{ color: "#FF9A8B", fontWeight: "bold" }}>{err.errorCode}</span>
+                                <span style={{ color: "#FF6B6B", fontWeight: "bold" }}>{err.errorCode}</span>
                                 <span style={{ color: "#8B949E" }}>]</span>
                                 <span style={{ color: "#F85149" }}>: {err.message}</span>
                               </div>
-                              <div style={{ color: "#6E7681" }}>&nbsp;--&gt;&nbsp;circuit.src:{err.line}:{err.column}</div>
-                              <div style={{ color: "#30363D" }}>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|</div>
+                              {/* --> circuit.src:L:C  (bold white path) */}
+                              <div>
+                                <span style={{ color: "#8B949E" }}> --&gt; </span>
+                                <span style={{ color: "#E6EDF3", fontWeight: "bold" }}>circuit.src</span>
+                                <span style={{ color: "#8B949E" }}>:{err.line}:{err.column}</span>
+                              </div>
+                              <div style={{ color: "#30363D" }}>     |</div>
                               {srcLine && (
                                 <>
-                                  <div>
-                                    <span style={{ color: "#6E7681" }}>{lineNum} |&nbsp;</span>
-                                    <span style={{ color: "#C9D1D9" }}>{srcLine}</span>
+                                  <div style={{ whiteSpace: "pre" }}>
+                                    <span style={{ color: "#6E7681" }}>{lineNum} | </span>
+                                    <span style={{ color: "#E6EDF3" }}>{srcLine}</span>
                                   </div>
-                                  <div>
-                                    <span style={{ color: "#30363D" }}>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;</span>
-                                    <span style={{ color: "#F85149" }}>{"^".repeat(Math.min(srcLine.trim().length, 50))}</span>
+                                  <div style={{ whiteSpace: "pre" }}>
+                                    <span style={{ color: "#30363D" }}>     | </span>
+                                    <span style={{ color: "#30363D" }}>{caretPad}</span>
+                                    <span style={{ color: "#FF2D55", fontWeight: "bold" }}>{caretSpan}</span>
                                   </div>
                                 </>
                               )}
-                              <div style={{ color: "#30363D" }}>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|</div>
+                              <div style={{ color: "#30363D" }}>     |</div>
                             </div>
                           );
                         })}
@@ -605,6 +778,9 @@ export default function Home() {
                           const lineNum = String(warn.line).padStart(4);
                           const isVoltage = warn.warningCode === "W003";
                           const warnColor = isVoltage ? "#F0883E" : "#D29922";
+                          const col0    = Math.max(0, (warn.column ?? 1) - 1);
+                          const caretPad  = " ".repeat(col0);
+                          const caretSpan = srcLine.length > col0 ? "^" + "~".repeat(Math.min(srcLine.slice(col0).trimEnd().length - 1, 30)) : "^";
                           return (
                             <div
                               key={`w-${i}`}
@@ -617,22 +793,35 @@ export default function Home() {
                               onMouseEnter={(e) => { e.currentTarget.style.background = "#161B22"; }}
                               onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                             >
+                              {/* warning[WXXX]: message */}
                               <div>
                                 <span style={{ color: warnColor, fontWeight: "bold" }}>warning</span>
                                 <span style={{ color: "#8B949E" }}>[</span>
-                                <span style={{ color: warnColor }}>{warn.warningCode}</span>
+                                <span style={{ color: warnColor, fontWeight: "bold" }}>{warn.warningCode}</span>
                                 <span style={{ color: "#8B949E" }}>]</span>
                                 <span style={{ color: warnColor }}>: {warn.message}</span>
                               </div>
-                              <div style={{ color: "#6E7681" }}>&nbsp;--&gt;&nbsp;circuit.src:{warn.line}:{warn.column}</div>
-                              <div style={{ color: "#30363D" }}>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|</div>
+                              {/* --> circuit.src:L:C */}
+                              <div>
+                                <span style={{ color: "#8B949E" }}> --&gt; </span>
+                                <span style={{ color: "#E6EDF3", fontWeight: "bold" }}>circuit.src</span>
+                                <span style={{ color: "#8B949E" }}>:{warn.line}:{warn.column}</span>
+                              </div>
+                              <div style={{ color: "#30363D" }}>     |</div>
                               {srcLine && (
-                                <div>
-                                  <span style={{ color: "#6E7681" }}>{lineNum} |&nbsp;</span>
-                                  <span style={{ color: "#C9D1D9" }}>{srcLine}</span>
-                                </div>
+                                <>
+                                  <div style={{ whiteSpace: "pre" }}>
+                                    <span style={{ color: "#6E7681" }}>{lineNum} | </span>
+                                    <span style={{ color: "#E6EDF3" }}>{srcLine}</span>
+                                  </div>
+                                  <div style={{ whiteSpace: "pre" }}>
+                                    <span style={{ color: "#30363D" }}>     | </span>
+                                    <span style={{ color: "#30363D" }}>{caretPad}</span>
+                                    <span style={{ color: warnColor }}>{caretSpan}</span>
+                                  </div>
+                                </>
                               )}
-                              <div style={{ color: "#30363D" }}>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|</div>
+                              <div style={{ color: "#30363D" }}>     |</div>
                             </div>
                           );
                         })}
@@ -659,9 +848,17 @@ export default function Home() {
                                     <span style={{ color: cfg.color }}>: {issue.message}</span>
                                   </div>
                                   {issue.detail && (
-                                    <div style={{ color: "#8B949E" }}>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;= note: {issue.detail}</div>
+                                    <div>
+                                      <span style={{ color: "#30363D" }}>     = </span>
+                                      <span style={{ color: "#56D364", fontWeight: "bold" }}>note</span>
+                                      <span style={{ color: "#8B949E" }}>: {issue.detail}</span>
+                                    </div>
                                   )}
-                                  <div style={{ color: "#6E7681" }}>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;= help: line {issue.line}</div>
+                                  <div>
+                                    <span style={{ color: "#30363D" }}>     = </span>
+                                    <span style={{ color: "#79C0FF", fontWeight: "bold" }}>help</span>
+                                    <span style={{ color: "#6E7681" }}>: line {issue.line}</span>
+                                  </div>
                                   {fixLabel && (
                                     <button
                                       onClick={() => handleApplyFix(issue)}
@@ -682,6 +879,62 @@ export default function Home() {
                             })}
                           </div>
                         )}
+
+                        {/* ── Test Suite ── */}
+                        {compileResult.testResults && compileResult.testResults.length > 0 && (() => {
+                          const tr = compileResult.testResults!;
+                          const passed = tr.filter((t) => t.passed).length;
+                          const allPass = passed === tr.length;
+                          return (
+                            <div className="mt-2 pt-2 border-t" style={{ borderColor: "#21262D" }}>
+                              <div className="mb-1.5" style={{ color: "#6E7681" }}>
+                                {"// ── Test Suite ─────────────────────────────────────"}
+                              </div>
+                              {tr.map((test, ti) => (
+                                <div key={ti} className="mb-2">
+                                  <div className="flex items-center gap-1.5">
+                                    <span style={{ color: "#6E7681" }}>test</span>
+                                    <span style={{ color: "#79C0FF", fontWeight: "bold" }}>"{test.description}"</span>
+                                    <span style={{ color: "#6E7681" }}>→</span>
+                                    <span style={{
+                                      color: test.passed ? "#3FB950" : "#F85149",
+                                      fontWeight: "bold",
+                                    }}>
+                                      {test.passed ? "PASS ✓" : "FAIL ✗"}
+                                    </span>
+                                  </div>
+                                  {test.assertions.map((a, ai) => (
+                                    <div key={ai} className="mt-0.5 ml-4" style={{ color: "#6E7681" }}>
+                                      <span style={{ color: a.passed ? "#3FB950" : "#F85149" }}>
+                                        {a.passed ? "✓" : "✗"}
+                                      </span>
+                                      {" "}
+                                      <span style={{ color: "#8B949E", fontFamily: "monospace" }}>
+                                        {a.code}
+                                      </span>
+                                      {" "}
+                                      <span style={{ color: "#6E7681" }}>
+                                        — {a.message}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              ))}
+                              <div
+                                className="mt-1 px-2 py-1.5 rounded flex items-center gap-2"
+                                style={{
+                                  background: allPass ? "#0D2B1A" : "#2B0D0D",
+                                  border: `1px solid ${allPass ? "#1A4D2E" : "#4D1A1A"}`,
+                                }}
+                              >
+                                <FlaskConical className="w-3 h-3 shrink-0" style={{ color: allPass ? "#3FB950" : "#F85149" }} />
+                                <span style={{ color: allPass ? "#3FB950" : "#F85149", fontWeight: "bold" }}>
+                                  Tests: {passed}/{tr.length} passed
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })()}
 
                         {/* ── Final summary line ── */}
                         <div className="mt-4 pt-2 border-t" style={{ borderColor: "#30363D" }}>
@@ -734,6 +987,7 @@ export default function Home() {
                   errors={compileResult.errors}
                   warnings={compileResult.warnings}
                   safetyIssues={compileResult.safetyIssues ?? []}
+                  testResults={compileResult.testResults ?? []}
                   focusedComponent={focusedComponent}
                   onComponentFocus={setFocusedComponent}
                   onTraceToCode={handleTraceToCode}

@@ -358,6 +358,7 @@ export interface CircuitSafetyTreeProps {
   errors:            Array<{ errorCode: string; message: string }>;
   warnings:          Array<{ warningCode: string; message: string }>;
   safetyIssues:      Array<{ code: string; severity: string; message: string }>;
+  testResults?:      Array<{ description: string; passed: boolean; assertions: Array<{ code: string; passed: boolean; message: string }> }>;
   focusedComponent?: string | null;
   onComponentFocus?: (id: string) => void;
   onTraceToCode?:    (compId: string, pinName?: string) => void;
@@ -369,6 +370,7 @@ export function CircuitSafetyTree({
   errors,
   warnings,
   safetyIssues,
+  testResults = [],
   focusedComponent,
   onComponentFocus,
   onTraceToCode,
@@ -410,21 +412,25 @@ export function CircuitSafetyTree({
     }, 60);
   }, [focusedComponent]);
 
-  // Confetti when health hits 100
+  const testsPassed = testResults.filter((t) => t.passed).length;
+  const testsTotal  = testResults.length;
+  const allTestsPass = testsTotal === 0 || testsPassed === testsTotal;
+
+  // Confetti when health = 100 AND all tests pass (or no tests defined)
   useEffect(() => {
-    if (healthScore !== 100) return;
-    confettiRef.current = Array.from({ length: 24 }, (_, i) => ({
+    if (healthScore !== 100 || !allTestsPass) return;
+    confettiRef.current = Array.from({ length: 36 }, (_, i) => ({
       id:       i,
-      color:    ["#3FB950","#58A6FF","#F0883E","#D29922","#BC8CFF"][i % 5],
-      x:        5 + ((i * 7 + 3) % 90),
-      delay:    (i * 0.12) % 1.8,
-      duration: 2.4 + (i % 5) * 0.35,
-      size:     5 + (i % 4) * 2,
+      color:    ["#3FB950","#58A6FF","#F0883E","#D29922","#BC8CFF","#FF79C6"][i % 6],
+      x:        2 + ((i * 13 + 5) % 96),
+      delay:    (i * 0.09) % 2.0,
+      duration: 2.2 + (i % 6) * 0.3,
+      size:     4 + (i % 5) * 2,
     }));
     setShowConfetti(true);
-    const t = setTimeout(() => setShowConfetti(false), 4200);
+    const t = setTimeout(() => setShowConfetti(false), 4800);
     return () => clearTimeout(t);
-  }, [healthScore]);
+  }, [healthScore, allTestsPass]);
 
   const toggle = (id: string) => {
     setExpanded((prev) => {
@@ -735,6 +741,81 @@ export function CircuitSafetyTree({
       {tree.length === 0 && (
         <div className="flex items-center justify-center h-20" style={{ color: "#3C4450" }}>
           No components in netlist
+        </div>
+      )}
+
+      {/* ── Test Results Status Bar ── */}
+      {testsTotal > 0 && (
+        <div
+          className="sticky bottom-0 border-t font-mono"
+          style={{ background: "#0D1117", borderColor: "#21262D" }}
+        >
+          {/* Summary row */}
+          <div
+            className="flex items-center gap-2 px-3 py-2 border-b"
+            style={{
+              background: testsPassed === testsTotal ? "#0D2B1A" : "#2B0D0D",
+              borderColor: testsPassed === testsTotal ? "#1A4D2E" : "#4D1A1A",
+            }}
+          >
+            {testsPassed === testsTotal ? (
+              <CheckCircle2 className="w-3.5 h-3.5 shrink-0" style={{ color: "#3FB950" }} />
+            ) : (
+              <XCircle className="w-3.5 h-3.5 shrink-0" style={{ color: "#F85149" }} />
+            )}
+            <span
+              className="text-[11px] font-semibold"
+              style={{ color: testsPassed === testsTotal ? "#3FB950" : "#F85149" }}
+            >
+              Tests Passed: {testsPassed}/{testsTotal}
+            </span>
+            {testsPassed === testsTotal && testsTotal > 0 && (
+              <span className="text-[10px]" style={{ color: "#3FB950" }}>
+                — all assertions satisfied ✓
+              </span>
+            )}
+            {testsPassed < testsTotal && (
+              <span className="text-[10px]" style={{ color: "#F85149" }}>
+                — {testsTotal - testsPassed} test{testsTotal - testsPassed !== 1 ? "s" : ""} failed
+              </span>
+            )}
+          </div>
+
+          {/* Per-test rows */}
+          <div className="px-3 py-1.5 space-y-1.5 max-h-[180px] overflow-auto">
+            {testResults.map((test, ti) => (
+              <div key={ti}>
+                <div className="flex items-center gap-1.5 text-[10px]">
+                  {test.passed ? (
+                    <CheckCircle2 className="w-2.5 h-2.5 shrink-0" style={{ color: "#3FB950" }} />
+                  ) : (
+                    <XCircle className="w-2.5 h-2.5 shrink-0" style={{ color: "#F85149" }} />
+                  )}
+                  <span
+                    className="font-semibold"
+                    style={{ color: test.passed ? "#79C0FF" : "#F85149" }}
+                  >
+                    {test.description}
+                  </span>
+                </div>
+                <div className="ml-4 mt-0.5 space-y-0.5">
+                  {test.assertions.map((a, ai) => (
+                    <div key={ai} className="flex items-start gap-1 text-[9px]">
+                      <span style={{ color: a.passed ? "#3FB950" : "#F85149" }}>
+                        {a.passed ? "✓" : "✗"}
+                      </span>
+                      <span
+                        className="font-mono"
+                        style={{ color: a.passed ? "#8B949E" : "#F0883E" }}
+                      >
+                        {a.message}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

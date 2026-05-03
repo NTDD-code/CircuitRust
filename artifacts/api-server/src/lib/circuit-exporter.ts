@@ -24,13 +24,33 @@ const REFDES_PREFIX: Record<string, string> = {
 
 function buildRefDesMap(components: NetlistComponent[]): Map<string, string> {
   const counters = new Map<string, number>();
+  const used     = new Set<string>();
   const refMap   = new Map<string, string>();
+
+  // First pass: claim designators for variables that already look like RefDes
+  // e.g. `r1` → "R1", `c2` → "C2", `q1` → "Q1", `mcu1` → "MCU1"
   for (const comp of components) {
     const prefix = REFDES_PREFIX[comp.type] ?? "X";
-    const count  = (counters.get(prefix) ?? 0) + 1;
+    const re     = new RegExp(`^${prefix}(\\d+)$`, "i");
+    const match  = comp.id.match(re);
+    if (match) {
+      const refDes = `${prefix}${match[1]}`;
+      refMap.set(comp.id, refDes);
+      used.add(refDes);
+    }
+  }
+
+  // Second pass: auto-assign sequential RefDes for the rest
+  for (const comp of components) {
+    if (refMap.has(comp.id)) continue;
+    const prefix = REFDES_PREFIX[comp.type] ?? "X";
+    let   count  = (counters.get(prefix) ?? 0) + 1;
+    while (used.has(`${prefix}${count}`)) count++;
     counters.set(prefix, count);
+    used.add(`${prefix}${count}`);
     refMap.set(comp.id, `${prefix}${count}`);
   }
+
   return refMap;
 }
 
