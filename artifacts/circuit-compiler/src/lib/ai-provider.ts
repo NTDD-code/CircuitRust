@@ -93,6 +93,7 @@ Diodes:     LED, Diode, ZenerDiode, SchottkyDiode, TVSDiode
 Transistors: NPN, PNP, NMOSFET, PMOSFET
 Op-Amps:    OpAmp741, OpAmpTL082, OpAmpLM358
 Power:      VoltageRegulator, LDO, BuckConverter, BoostConverter, LevelShifter
+Motor Drivers: L298N
 Sensors:    DHT11, DHT22, MPU6050, Ultrasonic, IRSensor, PhotoResistor, Thermistor
 MCU Modules: ArduinoUno, ArduinoNano, ESP32, ESP8266, RaspberryPiPico
 Actuators:  Buzzer, Motor, Relay, Solenoid, IC
@@ -118,6 +119,7 @@ ArduinoNano: vcc, gnd, d2-d13, a0-a7, tx, rx, sda, scl, reset
 ESP32: vcc, gnd, gpio0, gpio2, gpio4, gpio5, gpio12-gpio15, gpio16-gpio23, gpio25-gpio27, tx, rx, sda, scl, en
 ESP8266: vcc, gnd, gpio0, gpio2, gpio4, gpio5, tx, rx, rst, en
 RaspberryPiPico: vcc, gnd, gp0-gp28, tx, rx, sda, scl
+L298N: in1, in2, in3, in4, enA, enB (control) | vs, vss, gnd (power) | out1, out2, out3, out4 (motor)
 Buzzer: vcc, gnd
 Motor: m_pos, m_neg
 Relay: coil_a, coil_b, no, nc, com

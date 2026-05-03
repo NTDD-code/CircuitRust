@@ -7,7 +7,7 @@ const COMPONENT_TYPES = [
   "Resistor", "Capacitor", "Inductor", "Button", "Switch", "Crystal", "Transformer",
   "LED", "Diode", "ZenerDiode", "SchottkyDiode", "TVSDiode",
   "NPN", "PNP", "NMOSFET", "PMOSFET",
-  "OpAmp741", "OpAmpTL082", "OpAmpLM358", "LevelShifter", "IC",
+  "OpAmp741", "OpAmpTL082", "OpAmpLM358", "LevelShifter", "L298N", "IC",
   "VoltageRegulator", "LDO", "BuckConverter", "BoostConverter",
   "DHT11", "DHT22", "MPU6050", "Ultrasonic", "IRSensor", "PhotoResistor", "Thermistor",
   "ArduinoUno", "ArduinoNano", "ESP32", "ESP8266", "RaspberryPiPico",
