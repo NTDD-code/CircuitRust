@@ -259,7 +259,7 @@ export interface LlmAnalyzeResult {
 }
 
 /**
- * MIME type of the image (image/jpeg or image/png)
+ * MIME type of the image
  */
 export type HecateAnalyzeRequestMimeType =
   (typeof HecateAnalyzeRequestMimeType)[keyof typeof HecateAnalyzeRequestMimeType];
@@ -273,9 +273,23 @@ export const HecateAnalyzeRequestMimeType = {
 export interface HecateAnalyzeRequest {
   /** Base64-encoded image data (JPEG or PNG) */
   imageBase64: string;
-  /** MIME type of the image (image/jpeg or image/png) */
+  /** MIME type of the image */
   mimeType: HecateAnalyzeRequestMimeType;
+  /** Optional functional description to guide reconstruction (HECATE Guidance) */
+  description?: string;
 }
+
+/**
+ * How the netlist was reconstructed
+ */
+export type HecateAnalyzeResultReconstructionMode =
+  (typeof HecateAnalyzeResultReconstructionMode)[keyof typeof HecateAnalyzeResultReconstructionMode];
+
+export const HecateAnalyzeResultReconstructionMode = {
+  "vision-only": "vision-only",
+  "description-guided": "description-guided",
+  merged: "merged",
+} as const;
 
 export interface HecateAnalyzeResult {
   /** Reverse-engineered CircuitRust DSL code */
@@ -286,6 +300,12 @@ export interface HecateAnalyzeResult {
   confidence: number;
   /** Number of components identified */
   componentCount: number;
+  /** How the netlist was reconstructed */
+  reconstructionMode: HecateAnalyzeResultReconstructionMode;
+  /** Whether HECATE detected messy/dangerous physical build quality */
+  uglyBuildDetected: boolean;
+  /** Physical safety note about the build quality (present when uglyBuildDetected) */
+  safetyNote?: string;
 }
 
 export type AiChatRequestProvider =

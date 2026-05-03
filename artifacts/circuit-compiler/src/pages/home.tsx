@@ -107,7 +107,7 @@ test "Power rails present" {
   assert_connected!(gnd, led1.cathode);
 }`;
 
-type OutputTab = "output" | "bom" | "netlist" | "tree";
+type OutputTab = "output" | "bom" | "netlist" | "tree" | "hecate";
 
 export default function Home() {
   const [showSplash, setShowSplash] = useState(true);
@@ -130,6 +130,11 @@ export default function Home() {
   const [hecateResult, setHecateResult]   = useState<HecateAnalyzeResult | null>(null);
   const [hecateError, setHecateError]     = useState<string | null>(null);
   const [hecateToast, setHecateToast]     = useState<string | null>(null);
+  const [hecateRevealData, setHecateRevealData] = useState<{
+    result: HecateAnalyzeResult;
+    photoUrl: string;
+  } | null>(null);
+  const hecateJustInjectedRef = useRef(false);
 
   const insertTextRef     = useRef<((text: string) => void) | null>(null);
   const handleCompileRef  = useRef<() => void>(() => {});
@@ -153,7 +158,12 @@ export default function Home() {
           setFocusedComponent(null);
           playCompileSound(result.success);
           if (result.success && result.netlist) {
-            setOutputTab("tree");
+            if (hecateJustInjectedRef.current) {
+              hecateJustInjectedRef.current = false;
+              setOutputTab("hecate");
+            } else {
+              setOutputTab("tree");
+            }
           }
         },
       }
@@ -282,11 +292,17 @@ export default function Home() {
   }, [source, compileMutation]);
 
   // ── HECATE handlers ────────────────────────────────────────────────────────
-  const handleHecateAnalyze = useCallback((imageBase64: string, mimeType: string) => {
+  const handleHecateAnalyze = useCallback((imageBase64: string, mimeType: string, description: string) => {
     setHecateResult(null);
     setHecateError(null);
     hecateMutation.mutate(
-      { data: { imageBase64, mimeType: mimeType as "image/jpeg" | "image/png" | "image/webp" } },
+      {
+        data: {
+          imageBase64,
+          mimeType: mimeType as "image/jpeg" | "image/png" | "image/webp",
+          ...(description.trim() ? { description: description.trim() } : {}),
+        },
+      },
       {
         onSuccess: (result) => {
           setHecateResult(result);
@@ -299,9 +315,14 @@ export default function Home() {
     );
   }, [hecateMutation]);
 
-  const handleHecateInject = useCallback((dslCode: string) => {
+  const handleHecateInject = useCallback((dslCode: string, photoUrl: string) => {
     setSource(dslCode);
     if (insertTextRef.current) insertTextRef.current(dslCode);
+    // Store reveal data for the split-view HECATE tab
+    if (hecateResult) {
+      setHecateRevealData({ result: hecateResult, photoUrl });
+    }
+    hecateJustInjectedRef.current = true;
     setHecateOpen(false);
     setHecateResult(null);
     setHecateError(null);
@@ -310,7 +331,7 @@ export default function Home() {
     // Show revelation toast
     setHecateToast("HECATE has revealed the circuit's inner logic.");
     setTimeout(() => setHecateToast(null), 5000);
-  }, []);
+  }, [hecateResult]);
 
   const handleHecateClose = useCallback(() => {
     setHecateOpen(false);
@@ -727,10 +748,11 @@ export default function Home() {
             >
               {(
                 [
-                  { id: "output", icon: Activity, label: "COMPILER OUTPUT" },
-                  { id: "bom", icon: BarChart2, label: "BOM", disabled: !compileResult?.success },
-                  { id: "netlist", icon: List, label: "NETLIST", disabled: !compileResult?.netlist },
-                  { id: "tree", icon: Network, label: "SAFETY TREE", disabled: !compileResult?.netlist },
+                  { id: "output",  icon: Activity,  label: "COMPILER OUTPUT" },
+                  { id: "bom",     icon: BarChart2,  label: "BOM",         disabled: !compileResult?.success },
+                  { id: "netlist", icon: List,       label: "NETLIST",     disabled: !compileResult?.netlist },
+                  { id: "tree",    icon: Network,    label: "SAFETY TREE", disabled: !compileResult?.netlist },
+                  { id: "hecate",  icon: Eye,        label: "HECATE VIEW", disabled: !hecateRevealData || !compileResult?.netlist },
                 ] satisfies OutputTabDef[]
               ).map(({ id, icon: Icon, label, disabled }) => (
                 <button
@@ -739,14 +761,24 @@ export default function Home() {
                   disabled={disabled}
                   className="flex items-center gap-1.5 px-4 h-full text-[10px] font-mono uppercase tracking-wider transition-colors border-b-2"
                   style={{
-                    color: outputTab === id ? "#C9D1D9" : disabled ? "#3C4450" : "#6E7681",
-                    borderColor: outputTab === id ? "#58A6FF" : "transparent",
+                    color: outputTab === id
+                      ? (id === "hecate" ? "#C4B5FD" : "#C9D1D9")
+                      : disabled ? "#3C4450" : id === "hecate" && hecateRevealData ? "#7C3AED" : "#6E7681",
+                    borderColor: outputTab === id
+                      ? (id === "hecate" ? "#7C3AED" : "#58A6FF")
+                      : "transparent",
                     background: outputTab === id ? "#0D1117" : "transparent",
                     cursor: disabled ? "not-allowed" : "pointer",
                   }}
                 >
                   <Icon className="w-3 h-3" />
                   {label}
+                  {id === "hecate" && hecateRevealData && outputTab !== "hecate" && (
+                    <span
+                      className="ml-1 w-1.5 h-1.5 rounded-full"
+                      style={{ background: "#7C3AED", boxShadow: "0 0 4px rgba(124,58,237,0.8)" }}
+                    />
+                  )}
                 </button>
               ))}
 
@@ -1088,6 +1120,134 @@ export default function Home() {
                   healthScore={healthScore}
                 />
               )}
+
+              {outputTab === "hecate" && hecateRevealData && compileResult?.netlist && (() => {
+                const { result: hr, photoUrl } = hecateRevealData;
+                const modeColors: Record<string, string> = {
+                  "vision-only": "#79C0FF", "description-guided": "#D29922", "merged": "#3FB950",
+                };
+                const modeLabels: Record<string, string> = {
+                  "vision-only": "Vision Only", "description-guided": "Description-Guided", "merged": "Vision + Guidance",
+                };
+                const modeColor = modeColors[hr.reconstructionMode] ?? "#8B949E";
+                const modeLabel = modeLabels[hr.reconstructionMode] ?? hr.reconstructionMode;
+                const confColor = hr.confidence >= 80 ? "#3FB950" : hr.confidence >= 50 ? "#D29922" : "#F85149";
+                return (
+                  <div className="flex h-full min-h-0" style={{ background: "#0D1117" }}>
+                    {/* ── Left: Original Photo ── */}
+                    <div
+                      className="w-[300px] shrink-0 flex flex-col border-r"
+                      style={{ borderColor: "#21262D" }}
+                    >
+                      <div
+                        className="px-3 py-2 border-b flex items-center justify-between shrink-0"
+                        style={{ background: "#0A0D12", borderColor: "#21262D" }}
+                      >
+                        <span className="text-[10px] font-mono uppercase tracking-widest" style={{ color: "#6E7681" }}>
+                          BEFORE · Physical Build
+                        </span>
+                        {hr.uglyBuildDetected && (
+                          <span
+                            className="text-[9px] px-1.5 py-0.5 rounded"
+                            style={{ background: "#D2992215", color: "#D29922", border: "1px solid #D2992240" }}
+                          >
+                            ugly build
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex-1 overflow-auto p-3 space-y-3">
+                        {photoUrl ? (
+                          <img
+                            src={photoUrl}
+                            alt="Original circuit"
+                            className="w-full rounded-lg object-contain"
+                            style={{
+                              filter: hr.uglyBuildDetected ? "brightness(0.82) saturate(0.65)" : "none",
+                              border: "1px solid #21262D",
+                            }}
+                          />
+                        ) : (
+                          <div
+                            className="w-full h-32 rounded-lg flex items-center justify-center text-[11px]"
+                            style={{ background: "#0A0D12", border: "1px solid #21262D", color: "#4A5568" }}
+                          >
+                            No photo
+                          </div>
+                        )}
+                        {/* Stats chips */}
+                        <div className="grid grid-cols-2 gap-1.5">
+                          <div className="rounded-lg px-2 py-1.5 flex flex-col" style={{ background: "#0A0D12", border: "1px solid #21262D" }}>
+                            <span className="text-[9px] uppercase tracking-widest" style={{ color: "#6E7681" }}>Confidence</span>
+                            <span className="text-sm font-bold" style={{ color: confColor }}>{hr.confidence}%</span>
+                          </div>
+                          <div className="rounded-lg px-2 py-1.5 flex flex-col" style={{ background: "#0A0D12", border: "1px solid #21262D" }}>
+                            <span className="text-[9px] uppercase tracking-widest" style={{ color: "#6E7681" }}>Components</span>
+                            <span className="text-sm font-bold" style={{ color: "#79C0FF" }}>{hr.componentCount}</span>
+                          </div>
+                        </div>
+                        <div className="rounded-lg px-2.5 py-2" style={{ background: "#0A0D12", border: `1px solid ${modeColor}30` }}>
+                          <span className="text-[9px] uppercase tracking-widest" style={{ color: "#6E7681" }}>Reconstruction</span>
+                          <p className="text-[11px] font-bold mt-0.5" style={{ color: modeColor }}>{modeLabel}</p>
+                        </div>
+                        {/* Analysis */}
+                        <div
+                          className="rounded-lg p-2.5 text-[10px] leading-relaxed"
+                          style={{ background: "#0A1628", border: "1px solid #7C3AED20", color: "#8B949E" }}
+                        >
+                          <p className="text-[9px] uppercase tracking-widest mb-1" style={{ color: "#4A3080" }}>
+                            HECATE Analysis
+                          </p>
+                          {hr.analysis}
+                        </div>
+                        {/* Safety note */}
+                        {hr.uglyBuildDetected && hr.safetyNote && (
+                          <div
+                            className="rounded-lg p-2.5 text-[10px] leading-relaxed"
+                            style={{ background: "#1A1200", border: "1px solid #D2992240", color: "#9D8A50" }}
+                          >
+                            <p className="text-[9px] uppercase tracking-widest mb-1 font-bold" style={{ color: "#D29922" }}>
+                              ⚠ Physical Safety Note
+                            </p>
+                            {hr.safetyNote}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* ── Right: Clean Safety Tree ── */}
+                    <div className="flex-1 min-w-0 flex flex-col">
+                      <div
+                        className="px-3 py-2 border-b flex items-center gap-2 shrink-0"
+                        style={{ background: "#080611", borderColor: "#7C3AED20" }}
+                      >
+                        <Eye className="w-3 h-3" style={{ color: "#7C3AED" }} />
+                        <span className="text-[10px] font-mono uppercase tracking-widest" style={{ color: "#7C3AED" }}>
+                          AFTER · Clean Safety Tree
+                        </span>
+                        <span
+                          className="ml-auto text-[9px] px-1.5 py-0.5 rounded"
+                          style={{ background: "#7C3AED15", color: "#A78BFA", border: "1px solid #7C3AED30" }}
+                        >
+                          HECATE reconstructed
+                        </span>
+                      </div>
+                      <div className="flex-1 min-h-0 overflow-auto">
+                        <CircuitSafetyTree
+                          netlist={compileResult.netlist}
+                          errors={compileResult.errors}
+                          warnings={compileResult.warnings}
+                          safetyIssues={compileResult.safetyIssues ?? []}
+                          testResults={compileResult.testResults ?? []}
+                          focusedComponent={focusedComponent}
+                          onComponentFocus={setFocusedComponent}
+                          onTraceToCode={handleTraceToCode}
+                          healthScore={healthScore}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           </div>
 

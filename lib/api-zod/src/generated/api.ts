@@ -291,7 +291,13 @@ export const HecateAnalyzeBody = zod.object({
   imageBase64: zod.string().describe("Base64-encoded image data (JPEG or PNG)"),
   mimeType: zod
     .enum(["image/jpeg", "image/png", "image/webp"])
-    .describe("MIME type of the image (image\/jpeg or image\/png)"),
+    .describe("MIME type of the image"),
+  description: zod
+    .string()
+    .optional()
+    .describe(
+      "Optional functional description to guide reconstruction (HECATE Guidance)",
+    ),
 });
 
 export const HecateAnalyzeResponse = zod.object({
@@ -301,6 +307,20 @@ export const HecateAnalyzeResponse = zod.object({
     .describe("Human-readable narrative of what HECATE found"),
   confidence: zod.number().describe("Confidence score 0-100"),
   componentCount: zod.number().describe("Number of components identified"),
+  reconstructionMode: zod
+    .enum(["vision-only", "description-guided", "merged"])
+    .describe("How the netlist was reconstructed"),
+  uglyBuildDetected: zod
+    .boolean()
+    .describe(
+      "Whether HECATE detected messy\/dangerous physical build quality",
+    ),
+  safetyNote: zod
+    .string()
+    .optional()
+    .describe(
+      "Physical safety note about the build quality (present when uglyBuildDetected)",
+    ),
 });
 
 /**

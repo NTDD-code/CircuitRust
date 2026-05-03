@@ -5,6 +5,7 @@
  * Strict Circuit Compiler API
  * OpenAPI spec version: 0.3.0
  */
+import type { HecateAnalyzeResultReconstructionMode } from "./hecateAnalyzeResultReconstructionMode";
 
 export interface HecateAnalyzeResult {
   /** Reverse-engineered CircuitRust DSL code */
@@ -15,4 +16,10 @@ export interface HecateAnalyzeResult {
   confidence: number;
   /** Number of components identified */
   componentCount: number;
+  /** How the netlist was reconstructed */
+  reconstructionMode: HecateAnalyzeResultReconstructionMode;
+  /** Whether HECATE detected messy/dangerous physical build quality */
+  uglyBuildDetected: boolean;
+  /** Physical safety note about the build quality (present when uglyBuildDetected) */
+  safetyNote?: string;
 }

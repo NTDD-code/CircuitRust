@@ -588,8 +588,11 @@ components:
           description: Base64-encoded image data (JPEG or PNG)
         mimeType:
           type: string
-          description: MIME type of the image (image/jpeg or image/png)
+          description: MIME type of the image
           enum: ["image/jpeg", "image/png", "image/webp"]
+        description:
+          type: string
+          description: Optional functional description to guide reconstruction (HECATE Guidance)
       required:
         - imageBase64
         - mimeType
@@ -609,11 +612,23 @@ components:
         componentCount:
           type: integer
           description: Number of components identified
+        reconstructionMode:
+          type: string
+          description: How the netlist was reconstructed
+          enum: ["vision-only", "description-guided", "merged"]
+        uglyBuildDetected:
+          type: boolean
+          description: Whether HECATE detected messy/dangerous physical build quality
+        safetyNote:
+          type: string
+          description: Physical safety note about the build quality (present when uglyBuildDetected)
       required:
         - dslCode
         - analysis
         - confidence
         - componentCount
+        - reconstructionMode
+        - uglyBuildDetected
 
     AiChatRequest:
       type: object

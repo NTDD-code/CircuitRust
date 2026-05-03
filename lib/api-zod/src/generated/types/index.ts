@@ -27,6 +27,7 @@ export * from "./healthStatus";
 export * from "./hecateAnalyzeRequest";
 export * from "./hecateAnalyzeRequestMimeType";
 export * from "./hecateAnalyzeResult";
+export * from "./hecateAnalyzeResultReconstructionMode";
 export * from "./llmAnalyzeRequest";
 export * from "./llmAnalyzeResult";
 export * from "./net";

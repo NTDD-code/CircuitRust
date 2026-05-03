@@ -7,7 +7,7 @@
  */
 
 /**
- * MIME type of the image (image/jpeg or image/png)
+ * MIME type of the image
  */
 export type HecateAnalyzeRequestMimeType =
   (typeof HecateAnalyzeRequestMimeType)[keyof typeof HecateAnalyzeRequestMimeType];

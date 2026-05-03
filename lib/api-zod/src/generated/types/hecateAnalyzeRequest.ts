@@ -10,6 +10,8 @@ import type { HecateAnalyzeRequestMimeType } from "./hecateAnalyzeRequestMimeTyp
 export interface HecateAnalyzeRequest {
   /** Base64-encoded image data (JPEG or PNG) */
   imageBase64: string;
-  /** MIME type of the image (image/jpeg or image/png) */
+  /** MIME type of the image */
   mimeType: HecateAnalyzeRequestMimeType;
+  /** Optional functional description to guide reconstruction (HECATE Guidance) */
+  description?: string;
 }
