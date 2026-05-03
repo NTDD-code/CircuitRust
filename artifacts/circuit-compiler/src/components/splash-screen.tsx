@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface SplashScreenProps {
@@ -7,14 +7,16 @@ interface SplashScreenProps {
 
 export function SplashScreen({ onDone }: SplashScreenProps) {
   const [visible, setVisible] = useState(true);
+  const onDoneRef = useRef(onDone);
+  useEffect(() => { onDoneRef.current = onDone; });
 
   useEffect(() => {
     const timer = setTimeout(() => {
       setVisible(false);
-      setTimeout(onDone, 600);
+      setTimeout(() => onDoneRef.current(), 600);
     }, 2400);
     return () => clearTimeout(timer);
-  }, [onDone]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <AnimatePresence>

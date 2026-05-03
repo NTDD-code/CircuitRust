@@ -505,12 +505,14 @@ export default function Home() {
     return () => clearTimeout(timer);
   }, [healthScore, compileResult?.testResults]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const handleSplashDone = useCallback(() => setShowSplash(false), []);
+
   const providerConfigured = isProviderConfigured(aiSettings);
   const providerLabel = getProviderLabel(aiSettings);
 
   return (
     <>
-      {showSplash && <SplashScreen onDone={() => setShowSplash(false)} />}
+      {showSplash && <SplashScreen onDone={handleSplashDone} />}
 
       {/* ── HECATE Vision Modal ── */}
       {hecateOpen && (

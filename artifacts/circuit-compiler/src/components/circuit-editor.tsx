@@ -1,4 +1,4 @@
-import { useRef, useCallback } from "react";
+import { useRef, useCallback, useEffect } from "react";
 import MonacoEditor, { OnMount, Monaco } from "@monaco-editor/react";
 import type { editor as MonacoEditorNS, Position } from "monaco-editor";
 import type { CompileError } from "@workspace/api-client-react";
@@ -33,6 +33,8 @@ interface CircuitEditorProps {
 export function CircuitEditor({ value, onChange, onCompile, errors, onInsertText, onScrollToLine }: CircuitEditorProps) {
   const monacoRef = useRef<Monaco | null>(null);
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
+  const onCompileRef = useRef(onCompile);
+  useEffect(() => { onCompileRef.current = onCompile; });
 
   const handleMount: OnMount = useCallback((editor, monaco) => {
     monacoRef.current = monaco;
@@ -198,7 +200,7 @@ export function CircuitEditor({ value, onChange, onCompile, errors, onInsertText
 
     editor.addCommand(
       monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter,
-      () => onCompile()
+      () => onCompileRef.current()
     );
 
     editor.addCommand(
@@ -207,7 +209,7 @@ export function CircuitEditor({ value, onChange, onCompile, errors, onInsertText
         localStorage.setItem("scc_last_source", editor.getValue());
       }
     );
-  }, [onCompile]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (onInsertText) {
     onInsertText((text: string) => {
