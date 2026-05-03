@@ -14,7 +14,7 @@ const REFDES_PREFIX: Record<string, string> = {
   NPN: "Q", PNP: "Q", NMOSFET: "Q", PMOSFET: "Q",
   OpAmp741: "U", OpAmpTL082: "U", OpAmpLM358: "U",
   VoltageRegulator: "U", LDO: "U", BuckConverter: "U", BoostConverter: "U",
-  LevelShifter: "U", IC: "U",
+  LevelShifter: "U", IC: "U", L298N: "U",
   DHT11: "U", DHT22: "U", MPU6050: "U", Ultrasonic: "US", IRSensor: "U",
   ArduinoUno: "MCU", ArduinoNano: "MCU", ESP32: "MCU", ESP8266: "MCU",
   RaspberryPiPico: "MCU", STM32: "MCU",
@@ -112,6 +112,9 @@ const KICAD_FOOTPRINTS: Record<string, string> = {
   // Generic IC
   IC: "Package_DIP:DIP-8_W7.62mm",
 
+  // Motor drivers
+  L298N: "Package_TO_SOT_THT:TO-220-15_Multiwatt_Vertical",
+
   // Actuators
   Buzzer:   "Buzzer_Beeper:Buzzer_12x9.5RM7.6",
   Motor:    "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical",
@@ -178,6 +181,9 @@ const KICAD_LIBSOURCE: Record<string, LibSource> = {
 
   // Generic IC
   IC: { lib: "Device", part: "IC", description: "Generic integrated circuit" },
+
+  // Motor drivers
+  L298N: { lib: "Driver_Motor", part: "L298N", description: "L298N dual H-bridge motor driver" },
 
   // Actuators
   Buzzer:   { lib: "Device",    part: "Buzzer",    description: "Buzzer" },
@@ -488,6 +494,14 @@ export function exportSpiceNetlist(netlist: Netlist, title: string = "circuit"):
         modelHints.push(`.subckt TL082 IN+ IN- VCC VEE OUT`);
         modelHints.push(`* Use manufacturer SPICE model for TL082`);
         modelHints.push(`.ends TL082`);
+        break;
+      }
+      // ── Motor drivers ─────────────────────────────────────────────────────
+      case "L298N": {
+        lines.push(`X${ref} ${pn("in1")} ${pn("in2")} ${pn("enA")} ${pn("in3")} ${pn("in4")} ${pn("enB")} ${pn("vs")} ${pn("vss")} ${pn("gnd")} ${pn("out1")} ${pn("out2")} ${pn("out3")} ${pn("out4")} L298N`);
+        modelHints.push(`.subckt L298N IN1 IN2 ENA IN3 IN4 ENB VS VSS GND OUT1 OUT2 OUT3 OUT4`);
+        modelHints.push(`* L298N: import ST Microelectronics SPICE model for accurate simulation`);
+        modelHints.push(`.ends L298N`);
         break;
       }
       // ── Voltage regulators ────────────────────────────────────────────────

@@ -340,6 +340,33 @@ export const COMPONENT_DEFS: Record<string, ComponentDef> = {
     ],
   },
 
+  // ── Motor Drivers ─────────────────────────────────────────────────────────
+  L298N: {
+    category: "active_ic",
+    description: "L298N dual H-bridge motor driver — up to 46 V motor supply, 2 A per channel",
+    aliases: ["L298"],
+    voltageLevel: 5.0,
+    pins: [
+      // Control inputs (logic, 5 V)
+      { name: "in1", type: "digital", direction: "in",  maxVoltage: 7.0, driveVoltage: 0, pinNumber: 5  },
+      { name: "in2", type: "digital", direction: "in",  maxVoltage: 7.0, driveVoltage: 0, pinNumber: 7  },
+      { name: "in3", type: "digital", direction: "in",  maxVoltage: 7.0, driveVoltage: 0, pinNumber: 10 },
+      { name: "in4", type: "digital", direction: "in",  maxVoltage: 7.0, driveVoltage: 0, pinNumber: 12 },
+      // Enable / PWM inputs
+      { name: "enA", type: "digital", direction: "in",  maxVoltage: 7.0, driveVoltage: 0, pinNumber: 6  },
+      { name: "enB", type: "digital", direction: "in",  maxVoltage: 7.0, driveVoltage: 0, pinNumber: 11 },
+      // Power supply pins
+      { name: "vs",  type: "power",   direction: "power",  maxVoltage: 46.0, pinNumber: 4  },
+      { name: "vss", type: "power",   direction: "power",  maxVoltage: 7.0,  pinNumber: 9  },
+      { name: "gnd", type: "ground",  direction: "ground",                   pinNumber: 8  },
+      // Motor outputs
+      { name: "out1", type: "analog", direction: "out", pinNumber: 2  },
+      { name: "out2", type: "analog", direction: "out", pinNumber: 3  },
+      { name: "out3", type: "analog", direction: "out", pinNumber: 13 },
+      { name: "out4", type: "analog", direction: "out", pinNumber: 14 },
+    ],
+  },
+
   // ── Sensors ───────────────────────────────────────────────────────────────
   DHT11: {
     category: "sensor",

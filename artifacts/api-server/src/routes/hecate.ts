@@ -19,6 +19,7 @@ Available component types and key properties:
   OpAmp741  |  OpAmpLM358  |  OpAmpTL082
   VoltageRegulator { voltage }  |  LDO { voltage }
   BuckConverter { voltage, current }  |  BoostConverter
+  L298N
   ArduinoUno  |  ArduinoNano  |  ESP32  |  ESP8266  |  RaspberryPiPico  |  STM32
   DHT11  |  DHT22  |  MPU6050  |  Ultrasonic  |  IRSensor
   Button  |  Switch  |  Crystal { frequency }  |  Buzzer  |  Motor  |  Relay  |  Solenoid
@@ -31,6 +32,7 @@ Pin names:
   OpAmp*: plus, minus, out, vcc, gnd
   VoltageRegulator/LDO: in, out, gnd
   Crystal: pin1, pin2
+  L298N: in1, in2, in3, in4, enA, enB (inputs) | vs, vss, gnd (power) | out1, out2, out3, out4 (motor outputs)
   ArduinoUno/Nano: vcc, gnd, d2…d13, a0…a5
   ESP32/ESP8266: vcc, gnd, gpio2/4/5/12/13/14/15/16/17/18/19/21/22/23
   DHT11/DHT22: vcc, gnd, data
