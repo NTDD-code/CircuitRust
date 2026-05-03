@@ -41,6 +41,8 @@ import {
   FilePlus,
   Copy,
   Check,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import { SplashScreen } from "@/components/splash-screen";
 import { CircuitEditor } from "@/components/circuit-editor";
@@ -128,6 +130,7 @@ export default function Home() {
   const [showSuccess, setShowSuccess] = useState(false);
   const [bundleLoading, setBundleLoading] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [savedAt, setSavedAt] = useState<Date | null>(() => {
     return localStorage.getItem("scc_last_source") !== null ? new Date() : null;
   });
@@ -538,6 +541,16 @@ export default function Home() {
           style={{ background: "#161B22", borderColor: "#30363D" }}
         >
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => setSidebarOpen((v) => !v)}
+              title={sidebarOpen ? "Hide component library" : "Show component library"}
+              className="w-7 h-7 flex items-center justify-center rounded transition-colors hover:bg-[#21262D]"
+              style={{ color: "#6E7681" }}
+            >
+              {sidebarOpen
+                ? <PanelLeftClose className="w-4 h-4" />
+                : <PanelLeftOpen  className="w-4 h-4" />}
+            </button>
             <div
               className="w-7 h-7 rounded-lg flex items-center justify-center text-sm shrink-0"
               style={{ background: "linear-gradient(135deg, #F0883E 0%, #FFD700 100%)" }}
@@ -768,8 +781,8 @@ export default function Home() {
         <div className="flex flex-1 min-h-0">
           {/* Left: Library Sidebar */}
           <div
-            className="w-[240px] shrink-0 border-r overflow-hidden flex flex-col"
-            style={{ borderColor: "#21262D" }}
+            className="shrink-0 border-r overflow-hidden flex flex-col transition-[width] duration-200 ease-in-out"
+            style={{ width: sidebarOpen ? "240px" : "0px", borderColor: "#21262D" }}
           >
             <LibraryPanel
               components={libraryData?.components ?? []}
