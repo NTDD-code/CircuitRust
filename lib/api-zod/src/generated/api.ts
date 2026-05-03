@@ -420,14 +420,18 @@ export const AnalyzeCircuitSafetyResponse = zod.object({
  * @summary Chat with AI provider (cloud Anthropic or local Ollama)
  */
 export const AiChatBody = zod.object({
-  provider: zod.enum(["cloud", "local"]),
+  provider: zod.enum(["cloud", "local", "google"]),
   model: zod.string(),
   systemPrompt: zod.string(),
   userMessage: zod.string(),
   apiKey: zod
     .string()
     .optional()
-    .describe("Optional API key override (used for cloud provider)"),
+    .describe("Optional API key override (used for cloud\/Anthropic provider)"),
+  googleApiKey: zod
+    .string()
+    .optional()
+    .describe("Google API key (used for google\/Gemini provider)"),
   ollamaUrl: zod
     .string()
     .optional()

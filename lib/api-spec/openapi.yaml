@@ -635,7 +635,7 @@ components:
       properties:
         provider:
           type: string
-          enum: [cloud, local]
+          enum: [cloud, local, google]
         model:
           type: string
         systemPrompt:
@@ -644,7 +644,10 @@ components:
           type: string
         apiKey:
           type: string
-          description: Optional API key override (used for cloud provider)
+          description: Optional API key override (used for cloud/Anthropic provider)
+        googleApiKey:
+          type: string
+          description: Google API key (used for google/Gemini provider)
         ollamaUrl:
           type: string
           description: Ollama base URL (required for local provider)

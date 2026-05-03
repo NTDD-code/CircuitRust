@@ -1,11 +1,15 @@
 export interface AiProviderSettings {
-  activeProvider: "cloud" | "local";
+  activeProvider: "cloud" | "local" | "google";
   cloud: {
     apiKey: string;
     model: string;
   };
   local: {
     baseUrl: string;
+    model: string;
+  };
+  google: {
+    apiKey: string;
     model: string;
   };
 }
@@ -16,12 +20,21 @@ export const CLOUD_MODELS = [
   { id: "claude-haiku-4-5", label: "claude-haiku-4-5 (fastest)" },
 ];
 
+export const GOOGLE_MODELS = [
+  { id: "gemini-2.5-pro", label: "gemini-2.5-pro (most powerful)" },
+  { id: "gemini-2.5-flash", label: "gemini-2.5-flash (recommended)" },
+  { id: "gemini-2.0-flash", label: "gemini-2.0-flash (fast)" },
+  { id: "gemini-1.5-pro", label: "gemini-1.5-pro" },
+  { id: "gemini-1.5-flash", label: "gemini-1.5-flash (fastest)" },
+];
+
 const STORAGE_KEY = "scc_ai_provider_v2";
 
 export const DEFAULT_SETTINGS: AiProviderSettings = {
   activeProvider: "local",
   cloud: { apiKey: "", model: "claude-sonnet-4-20250514" },
   local: { baseUrl: "http://localhost:11434", model: "" },
+  google: { apiKey: "", model: "gemini-2.5-flash" },
 };
 
 export function loadAiSettings(): AiProviderSettings {
@@ -42,11 +55,15 @@ export function getProviderLabel(settings: AiProviderSettings): string {
   if (settings.activeProvider === "cloud") {
     return settings.cloud.model ? `☁ ${settings.cloud.model}` : "☁ Cloud (not configured)";
   }
+  if (settings.activeProvider === "google") {
+    return settings.google.model ? `✦ ${settings.google.model}` : "✦ Google (not configured)";
+  }
   return settings.local.model ? `⬡ ${settings.local.model} (local)` : "⬡ Local (not configured)";
 }
 
 export function isProviderConfigured(settings: AiProviderSettings): boolean {
   if (settings.activeProvider === "cloud") return !!settings.cloud.apiKey;
+  if (settings.activeProvider === "google") return !!settings.google.apiKey;
   return !!settings.local.model;
 }
 

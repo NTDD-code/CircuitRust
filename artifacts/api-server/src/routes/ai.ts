@@ -10,7 +10,7 @@ router.post("/ai/chat", async (req, res) => {
     return;
   }
 
-  const { provider, model, systemPrompt, userMessage, apiKey, ollamaUrl } = parsed.data;
+  const { provider, model, systemPrompt, userMessage, apiKey, googleApiKey, ollamaUrl } = parsed.data;
 
   if (provider === "cloud") {
     const key = apiKey || process.env["ANTHROPIC_API_KEY"];
@@ -33,6 +33,34 @@ router.post("/ai/chat", async (req, res) => {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       res.status(500).json({ error: `Anthropic API error: ${msg}` });
+    }
+    return;
+  }
+
+  if (provider === "google") {
+    const key = googleApiKey || process.env["GOOGLE_API_KEY"];
+    if (!key) {
+      res.status(400).json({ error: "No Google API key configured. Pass googleApiKey in request." });
+      return;
+    }
+
+    try {
+      const { GoogleGenAI } = await import("@google/genai");
+      const client = new GoogleGenAI({ apiKey: key });
+      const result = await client.models.generateContent({
+        model,
+        contents: [
+          {
+            role: "user",
+            parts: [{ text: `${systemPrompt}\n\n${userMessage}` }],
+          },
+        ],
+      });
+      const text = result.text ?? "";
+      res.json({ response: text, provider: "google", model });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: `Google Gemini API error: ${msg}` });
     }
     return;
   }

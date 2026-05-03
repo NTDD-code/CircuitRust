@@ -12,8 +12,10 @@ export interface AiChatRequest {
   model: string;
   systemPrompt: string;
   userMessage: string;
-  /** Optional API key override (used for cloud provider) */
+  /** Optional API key override (used for cloud/Anthropic provider) */
   apiKey?: string;
+  /** Google API key (used for google/Gemini provider) */
+  googleApiKey?: string;
   /** Ollama base URL (required for local provider) */
   ollamaUrl?: string;
 }

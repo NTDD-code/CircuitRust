@@ -12,4 +12,5 @@ export type AiChatRequestProvider =
 export const AiChatRequestProvider = {
   cloud: "cloud",
   local: "local",
+  google: "google",
 } as const;

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Settings, Cloud, Monitor, CheckCircle, XCircle, Loader2, Radio, RefreshCw, Download } from "lucide-react";
+import { Settings, Cloud, Monitor, CheckCircle, XCircle, Loader2, Radio, RefreshCw, Download, Sparkles } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,7 @@ import {
 import {
   AiProviderSettings,
   CLOUD_MODELS,
+  GOOGLE_MODELS,
   saveAiSettings,
 } from "@/lib/ai-provider";
 import { useGetOllamaModels, useAiChat } from "@workspace/api-client-react";
@@ -39,6 +40,7 @@ export function AiSettingsDrawer({
 }: AiSettingsDrawerProps) {
   const [draft, setDraft] = useState<AiProviderSettings>(settings);
   const [cloudStatus, setCloudStatus] = useState<"idle" | "testing" | "ok" | "fail">("idle");
+  const [googleStatus, setGoogleStatus] = useState<"idle" | "testing" | "ok" | "fail">("idle");
   const [ollamaModels, setOllamaModels] = useState<OllamaDetectedModel[]>([]);
   const [ollamaAlive, setOllamaAlive] = useState<boolean | null>(null);
   const [pullModel, setPullModel] = useState("");
@@ -47,6 +49,7 @@ export function AiSettingsDrawer({
 
   const ollamaModelsMutation = useGetOllamaModels();
   const testCloudMutation = useAiChat();
+  const testGoogleMutation = useAiChat();
 
   useEffect(() => {
     if (open) setDraft(settings);
@@ -58,6 +61,9 @@ export function AiSettingsDrawer({
   const updateLocal = (patch: Partial<AiProviderSettings["local"]>) =>
     setDraft((d) => ({ ...d, local: { ...d.local, ...patch } }));
 
+  const updateGoogle = (patch: Partial<AiProviderSettings["google"]>) =>
+    setDraft((d) => ({ ...d, google: { ...d.google, ...patch } }));
+
   const handleSaveCloud = () => {
     const next = { ...draft, activeProvider: "cloud" as const };
     onSettingsChange(next);
@@ -67,6 +73,13 @@ export function AiSettingsDrawer({
 
   const handleSaveLocal = () => {
     const next = { ...draft, activeProvider: "local" as const };
+    onSettingsChange(next);
+    saveAiSettings(next);
+    onClose();
+  };
+
+  const handleSaveGoogle = () => {
+    const next = { ...draft, activeProvider: "google" as const };
     onSettingsChange(next);
     saveAiSettings(next);
     onClose();
@@ -88,6 +101,26 @@ export function AiSettingsDrawer({
       {
         onSuccess: () => setCloudStatus("ok"),
         onError: () => setCloudStatus("fail"),
+      }
+    );
+  };
+
+  const handleTestGoogle = () => {
+    if (!draft.google.apiKey) return;
+    setGoogleStatus("testing");
+    testGoogleMutation.mutate(
+      {
+        data: {
+          provider: "google",
+          model: draft.google.model,
+          systemPrompt: "You are a helpful assistant. Reply with a single word.",
+          userMessage: "Say: OK",
+          googleApiKey: draft.google.apiKey,
+        },
+      },
+      {
+        onSuccess: () => setGoogleStatus("ok"),
+        onError: () => setGoogleStatus("fail"),
       }
     );
   };
@@ -176,27 +209,123 @@ export function AiSettingsDrawer({
         </SheetHeader>
 
         <div className="flex-1 overflow-auto">
-          <Tabs defaultValue="cloud" className="h-full">
+          <Tabs defaultValue="google" className="h-full">
             <TabsList
               className="w-full rounded-none border-b h-10"
               style={{ background: "#0D1117", borderColor: "#30363D" }}
             >
               <TabsTrigger
+                value="google"
+                className="flex-1 font-mono text-xs gap-1.5 data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-[#4285F4] rounded-none"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                Google
+              </TabsTrigger>
+              <TabsTrigger
                 value="cloud"
-                className="flex-1 font-mono text-xs gap-2 data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-blue-400 rounded-none"
+                className="flex-1 font-mono text-xs gap-1.5 data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-blue-400 rounded-none"
               >
                 <Cloud className="w-3.5 h-3.5" />
-                Cloud (Anthropic)
+                Anthropic
               </TabsTrigger>
               <TabsTrigger
                 value="local"
-                className="flex-1 font-mono text-xs gap-2 data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-green-400 rounded-none"
+                className="flex-1 font-mono text-xs gap-1.5 data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-green-400 rounded-none"
               >
                 <Monitor className="w-3.5 h-3.5" />
-                Local (Ollama)
+                Ollama
               </TabsTrigger>
             </TabsList>
 
+            {/* ── Google / Gemini ── */}
+            <TabsContent value="google" className="p-6 space-y-5 m-0">
+              <p className="text-xs font-mono leading-relaxed" style={{ color: "#6E7681" }}>
+                Use Google Gemini with your own API key. Get one free at{" "}
+                <a
+                  href="https://aistudio.google.com/apikey"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: "#4285F4" }}
+                >
+                  aistudio.google.com
+                </a>
+              </p>
+
+              <div className="space-y-2">
+                <label className="text-xs font-mono" style={{ color: "#8B949E" }}>
+                  Google API Key
+                </label>
+                <Input
+                  type="password"
+                  placeholder="AIza..."
+                  value={draft.google.apiKey}
+                  onChange={(e) => updateGoogle({ apiKey: e.target.value })}
+                  className="font-mono text-xs h-9 border-0 focus-visible:ring-1"
+                  style={{ background: "#0D1117", color: "#C9D1D9" }}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-mono" style={{ color: "#8B949E" }}>
+                  Model
+                </label>
+                <Select
+                  value={draft.google.model}
+                  onValueChange={(v) => updateGoogle({ model: v })}
+                >
+                  <SelectTrigger
+                    className="font-mono text-xs h-9 border-0"
+                    style={{ background: "#0D1117", color: "#C9D1D9" }}
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent style={{ background: "#161B22", borderColor: "#30363D" }}>
+                    {GOOGLE_MODELS.map((m) => (
+                      <SelectItem key={m.id} value={m.id} className="font-mono text-xs">
+                        {m.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleTestGoogle}
+                  disabled={!draft.google.apiKey || googleStatus === "testing"}
+                  className="font-mono text-xs h-8"
+                  style={{ borderColor: "#30363D", color: "#C9D1D9" }}
+                >
+                  {googleStatus === "testing" ? (
+                    <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+                  ) : null}
+                  Test Connection
+                </Button>
+                {googleStatus === "ok" && (
+                  <Badge className="gap-1 text-xs font-mono" style={{ background: "#1A3C1A", color: "#3FB950" }}>
+                    <CheckCircle className="w-3 h-3" /> Connected
+                  </Badge>
+                )}
+                {googleStatus === "fail" && (
+                  <Badge className="gap-1 text-xs font-mono" style={{ background: "#3C1A1A", color: "#F85149" }}>
+                    <XCircle className="w-3 h-3" /> Failed
+                  </Badge>
+                )}
+              </div>
+
+              <Button
+                className="w-full font-mono text-xs h-9"
+                style={{ background: "#4285F4", color: "#fff" }}
+                onClick={handleSaveGoogle}
+                disabled={!draft.google.apiKey}
+              >
+                Save & Use Google Gemini
+              </Button>
+            </TabsContent>
+
+            {/* ── Anthropic / Claude ── */}
             <TabsContent value="cloud" className="p-6 space-y-5 m-0">
               <div className="space-y-2">
                 <label className="text-xs font-mono" style={{ color: "#8B949E" }}>
@@ -272,6 +401,7 @@ export function AiSettingsDrawer({
               </Button>
             </TabsContent>
 
+            {/* ── Ollama / Local ── */}
             <TabsContent value="local" className="p-6 space-y-5 m-0">
               <p className="text-xs font-mono leading-relaxed" style={{ color: "#6E7681" }}>
                 Ollama runs AI models entirely on your machine. No API key needed. Your data never leaves your

@@ -11,9 +11,10 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",
+    "@google/genai": "^1.51.0",
     "@workspace/api-zod": "workspace:*",
-    "@workspace/integrations-gemini-ai": "workspace:*",
     "@workspace/db": "workspace:*",
+    "@workspace/integrations-gemini-ai": "workspace:*",
     "cookie-parser": "^1.4.7",
     "cors": "^2",
     "drizzle-orm": "catalog:",

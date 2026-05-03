@@ -56,10 +56,13 @@ export function AiAssistantPanel({
           model:
             settings.activeProvider === "cloud"
               ? settings.cloud.model
-              : settings.local.model,
+              : settings.activeProvider === "google"
+                ? settings.google.model
+                : settings.local.model,
           systemPrompt: CIRCUIT_GENERATE_SYSTEM_PROMPT,
           userMessage: `Generate a circuit for: ${description}`,
           ...(settings.activeProvider === "cloud" ? { apiKey: settings.cloud.apiKey } : {}),
+          ...(settings.activeProvider === "google" ? { googleApiKey: settings.google.apiKey } : {}),
           ...(settings.activeProvider === "local" ? { ollamaUrl: settings.local.baseUrl } : {}),
         },
       },
