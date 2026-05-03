@@ -5,11 +5,13 @@ import {
   useExportNetlist,
   useGetExamples,
   useGetComponentLibrary,
+  useHecateAnalyze,
   getGetExamplesQueryKey,
   getGetComponentLibraryQueryKey,
   type CompileResult,
   type LlmAnalyzeResult,
   type NetlistComponent,
+  type HecateAnalyzeResult,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -35,6 +37,7 @@ import {
   List,
   Package,
   FlaskConical,
+  Eye,
 } from "lucide-react";
 import { SplashScreen } from "@/components/splash-screen";
 import { CircuitEditor } from "@/components/circuit-editor";
@@ -48,6 +51,7 @@ import { loadAiSettings, saveAiSettings, getProviderLabel, isProviderConfigured,
 import { generateFix, FIX_LABELS } from "@/lib/safety-fix";
 import { HealthGauge } from "@/components/health-gauge";
 import { calculateHealthScore, playCompileSound } from "@/lib/health-score";
+import { HecateModal } from "@/components/hecate-modal";
 import type { SafetyIssue } from "@workspace/api-client-react";
 
 type LucideIcon = ForwardRefExoticComponent<Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>>;
@@ -121,12 +125,19 @@ export default function Home() {
   const [showSuccess, setShowSuccess] = useState(false);
   const [bundleLoading, setBundleLoading] = useState(false);
 
+  // ── HECATE Vision state ─────────────────────────────────────────────────────
+  const [hecateOpen, setHecateOpen]       = useState(false);
+  const [hecateResult, setHecateResult]   = useState<HecateAnalyzeResult | null>(null);
+  const [hecateError, setHecateError]     = useState<string | null>(null);
+  const [hecateToast, setHecateToast]     = useState<string | null>(null);
+
   const insertTextRef     = useRef<((text: string) => void) | null>(null);
   const handleCompileRef  = useRef<() => void>(() => {});
   const scrollToLineRef   = useRef<((line: number) => void) | null>(null);
 
-  const compileMutation = useCompileCircuit();
-  const exportMutation = useExportNetlist();
+  const compileMutation  = useCompileCircuit();
+  const exportMutation   = useExportNetlist();
+  const hecateMutation   = useHecateAnalyze();
   const { data: examplesData } = useGetExamples({ query: { queryKey: getGetExamplesQueryKey() } });
   const { data: libraryData } = useGetComponentLibrary({ query: { queryKey: getGetComponentLibraryQueryKey() } });
 
@@ -270,6 +281,43 @@ export default function Home() {
     }, 250);
   }, [source, compileMutation]);
 
+  // ── HECATE handlers ────────────────────────────────────────────────────────
+  const handleHecateAnalyze = useCallback((imageBase64: string, mimeType: string) => {
+    setHecateResult(null);
+    setHecateError(null);
+    hecateMutation.mutate(
+      { data: { imageBase64, mimeType: mimeType as "image/jpeg" | "image/png" | "image/webp" } },
+      {
+        onSuccess: (result) => {
+          setHecateResult(result);
+        },
+        onError: (err) => {
+          const msg = err instanceof Error ? err.message : "HECATE vision analysis failed. Try a clearer image.";
+          setHecateError(msg);
+        },
+      }
+    );
+  }, [hecateMutation]);
+
+  const handleHecateInject = useCallback((dslCode: string) => {
+    setSource(dslCode);
+    if (insertTextRef.current) insertTextRef.current(dslCode);
+    setHecateOpen(false);
+    setHecateResult(null);
+    setHecateError(null);
+    // Auto-compile after inject
+    setTimeout(() => handleCompileRef.current(), 80);
+    // Show revelation toast
+    setHecateToast("HECATE has revealed the circuit's inner logic.");
+    setTimeout(() => setHecateToast(null), 5000);
+  }, []);
+
+  const handleHecateClose = useCallback(() => {
+    setHecateOpen(false);
+    setHecateResult(null);
+    setHecateError(null);
+  }, []);
+
   // ── Production Bundle download ─────────────────────────────────────────────
   const handleDownloadBundle = useCallback(async () => {
     if (!compileResult?.netlist || !compileResult.success) return;
@@ -394,6 +442,18 @@ export default function Home() {
   return (
     <>
       {showSplash && <SplashScreen onDone={() => setShowSplash(false)} />}
+
+      {/* ── HECATE Vision Modal ── */}
+      {hecateOpen && (
+        <HecateModal
+          onClose={handleHecateClose}
+          onInject={handleHecateInject}
+          onAnalyze={handleHecateAnalyze}
+          loading={hecateMutation.isPending}
+          result={hecateResult}
+          error={hecateError}
+        />
+      )}
 
       <AiSettingsDrawer
         open={settingsOpen}
@@ -548,6 +608,22 @@ export default function Home() {
               </DropdownMenuContent>
             </DropdownMenu>
 
+            {/* HECATE Vision button */}
+            <button
+              onClick={() => { setHecateOpen(true); setHecateResult(null); setHecateError(null); }}
+              className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-mono font-semibold transition-all hover:opacity-90 active:scale-[0.98]"
+              title="Open HECATE's Eyes — AI PCB vision reverse-engineering"
+              style={{
+                background: "linear-gradient(135deg, #3B1D6E 0%, #1E1B4B 100%)",
+                color: "#C4B5FD",
+                border: "1px solid #7C3AED50",
+                boxShadow: "0 2px 12px rgba(124,58,237,0.25)",
+              }}
+            >
+              <Eye className="w-3.5 h-3.5" />
+              HECATE
+            </button>
+
             <Button
               onClick={handleCompile}
               disabled={compileMutation.isPending}
@@ -564,6 +640,24 @@ export default function Home() {
             </Button>
           </div>
         </header>
+
+        {/* ── HECATE revelation toast ── */}
+        {hecateToast && (
+          <div className="fixed top-14 inset-x-0 flex justify-center z-50 pointer-events-none">
+            <div
+              className="flex items-center gap-3 px-5 py-2.5 rounded-lg font-mono text-sm"
+              style={{
+                background: "#1A0A2E",
+                border:     "1px solid #7C3AED80",
+                color:      "#E2D9F3",
+                boxShadow:  "0 4px 32px rgba(124,58,237,0.4)",
+              }}
+            >
+              <Eye className="w-4 h-4 shrink-0" style={{ color: "#7C3AED" }} />
+              <span>{hecateToast}</span>
+            </div>
+          </div>
+        )}
 
         {/* ── Success toast ── */}
         {showSuccess && (() => {

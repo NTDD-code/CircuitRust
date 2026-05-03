@@ -26,6 +26,8 @@ import type {
   ExportRequest,
   ExportResult,
   HealthStatus,
+  HecateAnalyzeRequest,
+  HecateAnalyzeResult,
   LlmAnalyzeRequest,
   LlmAnalyzeResult,
   OllamaModelsRequest,
@@ -441,6 +443,93 @@ export const useExportNetlist = <
   TContext
 > => {
   return useMutation(getExportNetlistMutationOptions(options));
+};
+
+/**
+ * Upload a PCB photo as base64; Gemini Vision returns CircuitRust DSL code
+ * @summary HECATE — AI vision reverse-engineering of PCB photos
+ */
+export const getHecateAnalyzeUrl = () => {
+  return `/api/hecate/analyze`;
+};
+
+export const hecateAnalyze = async (
+  hecateAnalyzeRequest: HecateAnalyzeRequest,
+  options?: RequestInit,
+): Promise<HecateAnalyzeResult> => {
+  return customFetch<HecateAnalyzeResult>(getHecateAnalyzeUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(hecateAnalyzeRequest),
+  });
+};
+
+export const getHecateAnalyzeMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof hecateAnalyze>>,
+    TError,
+    { data: BodyType<HecateAnalyzeRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof hecateAnalyze>>,
+  TError,
+  { data: BodyType<HecateAnalyzeRequest> },
+  TContext
+> => {
+  const mutationKey = ["hecateAnalyze"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof hecateAnalyze>>,
+    { data: BodyType<HecateAnalyzeRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return hecateAnalyze(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type HecateAnalyzeMutationResult = NonNullable<
+  Awaited<ReturnType<typeof hecateAnalyze>>
+>;
+export type HecateAnalyzeMutationBody = BodyType<HecateAnalyzeRequest>;
+export type HecateAnalyzeMutationError = ErrorType<unknown>;
+
+/**
+ * @summary HECATE — AI vision reverse-engineering of PCB photos
+ */
+export const useHecateAnalyze = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof hecateAnalyze>>,
+    TError,
+    { data: BodyType<HecateAnalyzeRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof hecateAnalyze>>,
+  TError,
+  { data: BodyType<HecateAnalyzeRequest> },
+  TContext
+> => {
+  return useMutation(getHecateAnalyzeMutationOptions(options));
 };
 
 /**

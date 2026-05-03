@@ -284,6 +284,26 @@ export const ExportNetlistResponse = zod.object({
 });
 
 /**
+ * Upload a PCB photo as base64; Gemini Vision returns CircuitRust DSL code
+ * @summary HECATE — AI vision reverse-engineering of PCB photos
+ */
+export const HecateAnalyzeBody = zod.object({
+  imageBase64: zod.string().describe("Base64-encoded image data (JPEG or PNG)"),
+  mimeType: zod
+    .enum(["image/jpeg", "image/png", "image/webp"])
+    .describe("MIME type of the image (image\/jpeg or image\/png)"),
+});
+
+export const HecateAnalyzeResponse = zod.object({
+  dslCode: zod.string().describe("Reverse-engineered CircuitRust DSL code"),
+  analysis: zod
+    .string()
+    .describe("Human-readable narrative of what HECATE found"),
+  confidence: zod.number().describe("Confidence score 0-100"),
+  componentCount: zod.number().describe("Number of components identified"),
+});
+
+/**
  * @summary Analyze circuit safety with LLM
  */
 export const AnalyzeCircuitSafetyBody = zod.object({

@@ -258,6 +258,36 @@ export interface LlmAnalyzeResult {
   model: string;
 }
 
+/**
+ * MIME type of the image (image/jpeg or image/png)
+ */
+export type HecateAnalyzeRequestMimeType =
+  (typeof HecateAnalyzeRequestMimeType)[keyof typeof HecateAnalyzeRequestMimeType];
+
+export const HecateAnalyzeRequestMimeType = {
+  "image/jpeg": "image/jpeg",
+  "image/png": "image/png",
+  "image/webp": "image/webp",
+} as const;
+
+export interface HecateAnalyzeRequest {
+  /** Base64-encoded image data (JPEG or PNG) */
+  imageBase64: string;
+  /** MIME type of the image (image/jpeg or image/png) */
+  mimeType: HecateAnalyzeRequestMimeType;
+}
+
+export interface HecateAnalyzeResult {
+  /** Reverse-engineered CircuitRust DSL code */
+  dslCode: string;
+  /** Human-readable narrative of what HECATE found */
+  analysis: string;
+  /** Confidence score 0-100 */
+  confidence: number;
+  /** Number of components identified */
+  componentCount: number;
+}
+
 export type AiChatRequestProvider =
   (typeof AiChatRequestProvider)[keyof typeof AiChatRequestProvider];
 

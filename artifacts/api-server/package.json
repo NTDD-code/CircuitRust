@@ -12,6 +12,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",
     "@workspace/api-zod": "workspace:*",
+    "@workspace/integrations-gemini-ai": "workspace:*",
     "@workspace/db": "workspace:*",
     "cookie-parser": "^1.4.7",
     "cors": "^2",
