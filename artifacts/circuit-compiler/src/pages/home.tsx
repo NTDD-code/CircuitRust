@@ -10,7 +10,6 @@ import {
   type LlmAnalyzeResult,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,12 +25,12 @@ import {
   Loader2,
   ChevronDown,
   Download,
-  Zap,
   Settings,
   Activity,
   BarChart2,
   Network,
   Cpu,
+  List,
 } from "lucide-react";
 import { SplashScreen } from "@/components/splash-screen";
 import { CircuitEditor } from "@/components/circuit-editor";
@@ -40,6 +39,7 @@ import { AiAssistantPanel } from "@/components/ai-assistant-panel";
 import { AiSettingsDrawer } from "@/components/ai-settings-drawer";
 import { SchematicRenderer } from "@/components/schematic-renderer";
 import { BomPanel } from "@/components/bom-panel";
+import { NetlistView } from "@/components/netlist-view";
 import { loadAiSettings, saveAiSettings, getProviderLabel, isProviderConfigured, type AiProviderSettings } from "@/lib/ai-provider";
 import { generateFix, FIX_LABELS } from "@/lib/safety-fix";
 import type { SafetyIssue } from "@workspace/api-client-react";
@@ -58,7 +58,7 @@ connect!(vcc      => r1.pin1);
 connect!(r1.pin2  => led1.anode);
 connect!(led1.cathode => gnd);`;
 
-type OutputTab = "output" | "bom" | "visualizer";
+type OutputTab = "output" | "bom" | "visualizer" | "netlist";
 
 export default function Home() {
   const [showSplash, setShowSplash] = useState(true);
@@ -382,6 +382,7 @@ export default function Home() {
                 [
                   { id: "output", icon: Activity, label: "COMPILER OUTPUT" },
                   { id: "bom", icon: BarChart2, label: "BOM", disabled: !compileResult?.success },
+                  { id: "netlist", icon: List, label: "NETLIST", disabled: !compileResult?.netlist },
                   { id: "visualizer", icon: Network, label: "SCHEMATIC", disabled: !compileResult?.netlist },
                 ] satisfies OutputTabDef[]
               ).map(({ id, icon: Icon, label, disabled }) => (
@@ -424,180 +425,196 @@ export default function Home() {
               className="shrink-0 overflow-auto"
               style={{ height: "220px", background: "#0D1117", borderTop: "1px solid #21262D" }}
             >
-              {outputTab === "output" && (
-                <div className="p-4 font-mono text-xs leading-relaxed space-y-3">
-                  {!compileResult && !compileMutation.isPending && (
-                    <div className="h-full flex items-center justify-center pt-8" style={{ color: "#3C4450" }}>
-                      Ready to compile... (Ctrl+Enter)
-                    </div>
-                  )}
-                  {compileMutation.isPending && (
-                    <div className="flex items-center gap-2 animate-pulse" style={{ color: "#58A6FF" }}>
-                      <Loader2 className="w-4 h-4 animate-spin" /> Compiling circuit definition...
-                    </div>
-                  )}
-                  {compileResult && (
-                    <div className="space-y-2">
-                      {compileResult.success ? (
-                        <div className="flex items-center gap-2" style={{ color: "#3FB950" }}>
-                          <ShieldCheck className="w-4 h-4" />
-                          <span>
-                            ✓ Compiled successfully — {compileResult.errors.length} errors —{" "}
-                            {compileResult.netlist?.components.length ?? 0} components
-                          </span>
+              {outputTab === "output" && (() => {
+                const srcLines = source.split("\n");
+                return (
+                  <div className="p-4 font-mono text-xs leading-relaxed overflow-auto h-full" style={{ background: "#0D1117" }}>
+                    {/* ── Idle state ── */}
+                    {!compileResult && !compileMutation.isPending && (
+                      <div className="pt-6 text-center" style={{ color: "#3C4450" }}>
+                        {"// Ready to compile... (Ctrl+Enter)"}
+                      </div>
+                    )}
+
+                    {/* ── Compiling animation ── */}
+                    {compileMutation.isPending && (
+                      <div className="space-y-0.5 animate-pulse" style={{ color: "#8B949E" }}>
+                        <div>
+                          <span style={{ color: "#3FB950", fontWeight: "bold" }}>   Compiling</span>{" "}
+                          circuit "untitled" (strict mode)
                         </div>
-                      ) : (
-                        <div className="flex items-center gap-2" style={{ color: "#F85149" }}>
-                          <AlertTriangle className="w-4 h-4" />
-                          Compilation failed with {compileResult.errors.length} error{compileResult.errors.length !== 1 ? "s" : ""}.
+                        <div>
+                          <span style={{ color: "#3FB950", fontWeight: "bold" }}>    Checking</span>{" "}
+                          safety rules and voltage compatibility
                         </div>
-                      )}
+                        <div className="flex items-center gap-2 mt-1">
+                          <Loader2 className="w-3 h-3 animate-spin" /> Running compilation pass...
+                        </div>
+                      </div>
+                    )}
 
-                      {/* ── Safety Audit ── */}
-                      {compileResult.safetyIssues && compileResult.safetyIssues.length > 0 && (
-                        <div className="space-y-2">
-                          <div
-                            className="flex items-center gap-2 pt-1 pb-1 border-b"
-                            style={{ borderColor: "#21262D" }}
-                          >
-                            <span className="text-[10px] font-mono font-bold uppercase tracking-widest" style={{ color: "#FF6B35" }}>
-                              🔥 Safety Audit
-                            </span>
-                            <Badge
-                              className="text-[9px] font-mono px-1.5 py-0 h-4"
-                              style={{ background: "#3D1A0A", color: "#FF6B35", border: "1px solid #FF6B35" }}
-                            >
-                              {compileResult.safetyIssues.length} issue{compileResult.safetyIssues.length !== 1 ? "s" : ""}
-                            </Badge>
-                          </div>
-                          {compileResult.safetyIssues.map((issue, i) => {
-                            const cfg = {
-                              FATAL:    { icon: "💥", color: "#FF2D20", bg: "#3D0A0A", badge: "#FF2D20", label: "FATAL ERROR" },
-                              CRITICAL: { icon: "🔥", color: "#FF6B35", bg: "#3D1A0A", badge: "#FF6B35", label: "CRITICAL" },
-                              DANGER:   { icon: "⚡", color: "#F0883E", bg: "#3D2A0A", badge: "#F0883E", label: "DANGER" },
-                              WARNING:  { icon: "⚠️", color: "#D29922", bg: "#2D2200", badge: "#D29922", label: "WARNING" },
-                            }[issue.severity];
+                    {/* ── Compile result ── */}
+                    {compileResult && (
+                      <div className="space-y-0">
+                        {/* Header */}
+                        <div style={{ color: "#8B949E" }}>
+                          <span style={{ color: "#3FB950", fontWeight: "bold" }}>   Compiling</span>{" "}
+                          circuit "untitled" ({compileResult.netlist?.components.length ?? 0} components, strict mode)
+                        </div>
+                        <div className="mb-3" style={{ color: "#8B949E" }}>
+                          <span style={{ color: "#3FB950", fontWeight: "bold" }}>    Checking</span>{" "}
+                          {compileResult.netlist?.connections.length ?? 0} connections, {compileResult.netlist?.nets.length ?? 0} power domains
+                        </div>
 
-                            const fixLabel    = FIX_LABELS[issue.code];
-                            const isApplying  = applyingFix === issue.code;
-                            const wasApplied  = appliedFix  === issue.code;
-                            const canFix      = !!fixLabel && !isApplying;
-
-                            return (
-                              <div
-                                key={i}
-                                className="rounded-md p-2.5 space-y-1.5"
-                                style={{ background: cfg.bg, border: `1px solid ${cfg.color}44` }}
-                              >
-                                <div className="flex items-start gap-2">
-                                  <span className="text-sm shrink-0 mt-px">{cfg.icon}</span>
-                                  <div className="flex-1 space-y-0.5">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                      <Badge
-                                        className="text-[9px] font-mono px-1.5 py-0 h-4 shrink-0"
-                                        style={{ background: "transparent", color: cfg.color, border: `1px solid ${cfg.color}` }}
-                                      >
-                                        [{cfg.label}]
-                                      </Badge>
-                                      <span className="font-semibold text-[11px]" style={{ color: cfg.color }}>
-                                        {issue.message}
-                                      </span>
-                                    </div>
-                                    {issue.detail && (
-                                      <div className="text-[10px] leading-relaxed" style={{ color: "#8B949E" }}>
-                                        {issue.detail}
-                                      </div>
-                                    )}
-                                    <div className="text-[9px]" style={{ color: "#6E7681" }}>
-                                      {issue.code} · line {issue.line}
-                                    </div>
-                                  </div>
-                                </div>
-
-                                {/* ── Apply Fix button ── */}
-                                {canFix && (
-                                  <button
-                                    onClick={() => handleApplyFix(issue)}
-                                    disabled={isApplying}
-                                    className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded text-[10px] font-mono font-semibold transition-all"
-                                    style={{
-                                      background:   wasApplied ? "#0D3320" : `${cfg.color}18`,
-                                      border:       `1px solid ${wasApplied ? "#3FB950" : cfg.color}66`,
-                                      color:        wasApplied ? "#3FB950" : cfg.color,
-                                      cursor:       isApplying ? "wait" : "pointer",
-                                    }}
-                                  >
-                                    {wasApplied ? (
-                                      <>✓ Fix applied — recompiled</>
-                                    ) : isApplying ? (
-                                      <><Loader2 className="w-3 h-3 animate-spin" /> Applying fix &amp; recompiling…</>
-                                    ) : (
-                                      <>⚡ Apply Fix: {fixLabel}</>
-                                    )}
-                                  </button>
-                                )}
+                        {/* ── Errors ── */}
+                        {compileResult.errors.map((err, i) => {
+                          const srcLine = srcLines[err.line - 1] ?? "";
+                          const lineNum = String(err.line).padStart(4);
+                          return (
+                            <div key={`e-${i}`} className="mb-3">
+                              <div>
+                                <span style={{ color: "#F85149", fontWeight: "bold" }}>error</span>
+                                <span style={{ color: "#8B949E" }}>[</span>
+                                <span style={{ color: "#FF9A8B", fontWeight: "bold" }}>{err.errorCode}</span>
+                                <span style={{ color: "#8B949E" }}>]</span>
+                                <span style={{ color: "#F85149" }}>: {err.message}</span>
                               </div>
-                            );
-                          })}
-                        </div>
-                      )}
-
-                      {/* ── Compiler Errors ── */}
-                      {compileResult.errors.map((err, i) => (
-                        <div
-                          key={i}
-                          className="pl-3 border-l-2 space-y-0.5"
-                          style={{ borderColor: "#F85149" }}
-                        >
-                          <div style={{ color: "#F85149" }}>
-                            <span className="font-bold">error[{err.errorCode}]:</span> {err.message}
-                          </div>
-                          <div style={{ color: "#6E7681" }}>
-                            → line {err.line}, col {err.column}
-                          </div>
-                        </div>
-                      ))}
-
-                      {compileResult.warnings.map((warn, i) => {
-                        const isW003 = warn.warningCode === "W003";
-                        return (
-                          <div
-                            key={i}
-                            className="pl-3 border-l-2 space-y-0.5"
-                            style={{ borderColor: isW003 ? "#F0883E" : "#D29922" }}
-                          >
-                            <div
-                              className="flex items-center gap-2"
-                              style={{ color: isW003 ? "#F0883E" : "#D29922" }}
-                            >
-                              {isW003 ? (
-                                <Zap className="w-3.5 h-3.5 shrink-0" />
-                              ) : (
-                                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                              <div style={{ color: "#6E7681" }}>&nbsp;--&gt;&nbsp;circuit.src:{err.line}:{err.column}</div>
+                              <div style={{ color: "#30363D" }}>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|</div>
+                              {srcLine && (
+                                <>
+                                  <div>
+                                    <span style={{ color: "#6E7681" }}>{lineNum} |&nbsp;</span>
+                                    <span style={{ color: "#C9D1D9" }}>{srcLine}</span>
+                                  </div>
+                                  <div>
+                                    <span style={{ color: "#30363D" }}>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;</span>
+                                    <span style={{ color: "#F85149" }}>{"^".repeat(Math.min(srcLine.trim().length, 50))}</span>
+                                  </div>
+                                </>
                               )}
-                              <Badge
-                                className="text-[9px] font-mono px-1.5 py-0 h-4 shrink-0"
-                                style={{
-                                  background: "transparent",
-                                  color: isW003 ? "#F0883E" : "#D29922",
-                                  border: `1px solid ${isW003 ? "#F0883E" : "#D29922"}`,
-                                }}
-                              >
-                                {warn.warningCode}
-                              </Badge>
-                              {warn.message}
+                              <div style={{ color: "#30363D" }}>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|</div>
                             </div>
-                            <div style={{ color: "#6E7681" }}>→ line {warn.line}</div>
+                          );
+                        })}
+
+                        {/* ── Warnings ── */}
+                        {compileResult.warnings.map((warn, i) => {
+                          const srcLine = srcLines[warn.line - 1] ?? "";
+                          const lineNum = String(warn.line).padStart(4);
+                          const isVoltage = warn.warningCode === "W003";
+                          const warnColor = isVoltage ? "#F0883E" : "#D29922";
+                          return (
+                            <div key={`w-${i}`} className="mb-2">
+                              <div>
+                                <span style={{ color: warnColor, fontWeight: "bold" }}>warning</span>
+                                <span style={{ color: "#8B949E" }}>[</span>
+                                <span style={{ color: warnColor }}>{warn.warningCode}</span>
+                                <span style={{ color: "#8B949E" }}>]</span>
+                                <span style={{ color: warnColor }}>: {warn.message}</span>
+                              </div>
+                              <div style={{ color: "#6E7681" }}>&nbsp;--&gt;&nbsp;circuit.src:{warn.line}:{warn.column}</div>
+                              <div style={{ color: "#30363D" }}>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|</div>
+                              {srcLine && (
+                                <div>
+                                  <span style={{ color: "#6E7681" }}>{lineNum} |&nbsp;</span>
+                                  <span style={{ color: "#C9D1D9" }}>{srcLine}</span>
+                                </div>
+                              )}
+                              <div style={{ color: "#30363D" }}>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|</div>
+                            </div>
+                          );
+                        })}
+
+                        {/* ── Safety Audit ── */}
+                        {compileResult.safetyIssues && compileResult.safetyIssues.length > 0 && (
+                          <div className="mt-2 pt-2 space-y-2 border-t" style={{ borderColor: "#21262D" }}>
+                            <div style={{ color: "#6E7681" }}>{"// ── Safety Audit ─────────────────────────────────"}</div>
+                            {compileResult.safetyIssues.map((issue, i) => {
+                              const cfg = {
+                                FATAL:    { color: "#FF2D20", label: "FATAL",    icon: "💥" },
+                                CRITICAL: { color: "#FF6B35", label: "CRITICAL", icon: "🔥" },
+                                DANGER:   { color: "#F0883E", label: "DANGER",   icon: "⚡" },
+                                WARNING:  { color: "#D29922", label: "WARNING",  icon: "⚠" },
+                              }[issue.severity] ?? { color: "#D29922", label: "NOTE", icon: "·" };
+                              const fixLabel   = FIX_LABELS[issue.code];
+                              const isApplying = applyingFix === issue.code;
+                              const wasApplied = appliedFix  === issue.code;
+                              return (
+                                <div key={i} className="space-y-0.5">
+                                  <div>
+                                    <span style={{ color: cfg.color, fontWeight: "bold" }}>{cfg.icon} {cfg.label}</span>
+                                    <span style={{ color: "#8B949E" }}> [{issue.code}]</span>
+                                    <span style={{ color: cfg.color }}>: {issue.message}</span>
+                                  </div>
+                                  {issue.detail && (
+                                    <div style={{ color: "#8B949E" }}>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;= note: {issue.detail}</div>
+                                  )}
+                                  <div style={{ color: "#6E7681" }}>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;= help: line {issue.line}</div>
+                                  {fixLabel && (
+                                    <button
+                                      onClick={() => handleApplyFix(issue)}
+                                      disabled={isApplying}
+                                      className="ml-5 mt-0.5 px-2.5 py-1 rounded text-[10px] font-mono font-semibold transition-all"
+                                      style={{
+                                        background: wasApplied ? "#0D3320" : `${cfg.color}14`,
+                                        border: `1px solid ${wasApplied ? "#3FB950" : cfg.color}55`,
+                                        color: wasApplied ? "#3FB950" : cfg.color,
+                                        cursor: isApplying ? "wait" : "pointer",
+                                      }}
+                                    >
+                                      {wasApplied ? "✓ fix applied & recompiled" : isApplying ? "applying fix..." : `⚡ apply fix: ${fixLabel}`}
+                                    </button>
+                                  )}
+                                </div>
+                              );
+                            })}
                           </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              )}
+                        )}
+
+                        {/* ── Final summary line ── */}
+                        <div className="mt-4 pt-2 border-t" style={{ borderColor: "#30363D" }}>
+                          {compileResult.errors.length > 0 ? (
+                            <div>
+                              <span style={{ color: "#F85149", fontWeight: "bold" }}>error</span>
+                              <span style={{ color: "#C9D1D9" }}>
+                                : could not compile circuit due to{" "}
+                                <span style={{ color: "#F85149", fontWeight: "bold" }}>{compileResult.errors.length}</span>{" "}
+                                error{compileResult.errors.length !== 1 ? "s" : ""}
+                              </span>
+                              {compileResult.warnings.length > 0 && (
+                                <span style={{ color: "#D29922" }}>
+                                  {" "}({compileResult.warnings.length} warning{compileResult.warnings.length !== 1 ? "s" : ""})
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2" style={{ color: "#3FB950" }}>
+                              <ShieldCheck className="w-3.5 h-3.5" />
+                              <span style={{ fontWeight: "bold" }}>Finished</span>
+                              <span style={{ color: "#C9D1D9" }}>
+                                — {compileResult.netlist?.components.length ?? 0} component{(compileResult.netlist?.components.length ?? 0) !== 1 ? "s" : ""} compiled successfully
+                              </span>
+                              {compileResult.warnings.length > 0 && (
+                                <span style={{ color: "#D29922" }}>
+                                  · {compileResult.warnings.length} warning{compileResult.warnings.length !== 1 ? "s" : ""}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {outputTab === "bom" && compileResult?.netlist && (
                 <BomPanel netlist={compileResult.netlist} />
+              )}
+
+              {outputTab === "netlist" && compileResult?.netlist && (
+                <NetlistView netlist={compileResult.netlist} />
               )}
 
               {outputTab === "visualizer" && compileResult?.netlist && (

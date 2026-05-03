@@ -5,6 +5,7 @@ import type {
   ParseError,
   ParsedPin,
   PinType,
+  ComponentCategory,
 } from "./circuit-parser.js";
 
 export interface ValidationResult {
@@ -641,6 +642,49 @@ export function validateCircuit(
       warnings.push({ line: highVConn.line, column: 1,
         message: `W007: Transistor '${qId}' (${qComp.type}) has ${highVNet.voltage}V net '${highVNetId}' on its '${highVPinName}' pin, but the transistor also interfaces with 3.3V logic at ${lowLabel}. Verify the base drive voltage is 3.3V-compatible or add appropriate protection.`,
         warningCode: "W007" });
+    }
+  }
+
+  // ── W009: Missing decoupling capacitor on IC/sensor/module VCC pins ─────────
+  // For every IC, sensor, or module whose VCC pin is connected to a power net,
+  // check that at least one Capacitor bridges that same power root to any ground root.
+  const DECOUPLE_CATEGORIES = new Set<ComponentCategory>(["active_ic", "sensor", "module"]);
+  const VCC_PIN_RE = /^(vcc|vdd|v\+|vbat|avcc|dvcc|vccio|vin|v3v3|v5)$/i;
+  const CAPACITOR_TYPES = new Set(["Capacitor"]);
+
+  const powerRoots = new Set<string>();
+  const groundRootsSet = new Set<string>();
+  for (const [varName, net] of nets) {
+    if (net.type === "power")  powerRoots.add(uf.find(`net:${varName}`));
+    if (net.type === "ground") groundRootsSet.add(uf.find(`net:${varName}`));
+  }
+
+  for (const [name, comp] of components) {
+    if (!DECOUPLE_CATEGORIES.has(comp.category)) continue;
+
+    const vccPins = comp.pins.filter((p) => p.type === "power" || VCC_PIN_RE.test(p.name));
+    for (const vccPin of vccPins) {
+      const pinEp   = `${name}:${vccPin.name}`;
+      const pinRoot = uf.find(pinEp);
+      if (!powerRoots.has(pinRoot)) continue;
+
+      let hasDecoupling = false;
+      for (const [capId, capComp] of components) {
+        if (!CAPACITOR_TYPES.has(capComp.type)) continue;
+        const r1 = uf.find(`${capId}:pin1`);
+        const r2 = uf.find(`${capId}:pin2`);
+        if (
+          (r1 === pinRoot && groundRootsSet.has(r2)) ||
+          (r2 === pinRoot && groundRootsSet.has(r1))
+        ) { hasDecoupling = true; break; }
+      }
+
+      if (!hasDecoupling) {
+        warnings.push({ line: comp.line, column: 1,
+          message: `W009: Component '${name}' (${comp.type}) has no decoupling capacitor on its ${vccPin.name} pin. Add a 100nF ceramic capacitor between ${vccPin.name} and GND as close to the IC as possible to suppress power supply noise.`,
+          warningCode: "W009" });
+        break;
+      }
     }
   }
 
