@@ -37,7 +37,7 @@ import { CircuitEditor } from "@/components/circuit-editor";
 import { LibraryPanel } from "@/components/library-panel";
 import { AiAssistantPanel } from "@/components/ai-assistant-panel";
 import { AiSettingsDrawer } from "@/components/ai-settings-drawer";
-import { SchematicRenderer } from "@/components/schematic-renderer";
+import { CircuitSafetyTree } from "@/components/circuit-safety-tree";
 import { BomPanel } from "@/components/bom-panel";
 import { NetlistView } from "@/components/netlist-view";
 import { loadAiSettings, saveAiSettings, getProviderLabel, isProviderConfigured, type AiProviderSettings } from "@/lib/ai-provider";
@@ -58,7 +58,7 @@ connect!(vcc      => r1.pin1);
 connect!(r1.pin2  => led1.anode);
 connect!(led1.cathode => gnd);`;
 
-type OutputTab = "output" | "bom" | "visualizer" | "netlist";
+type OutputTab = "output" | "bom" | "netlist" | "tree";
 
 export default function Home() {
   const [showSplash, setShowSplash] = useState(true);
@@ -72,6 +72,7 @@ export default function Home() {
   const [outputTab, setOutputTab] = useState<OutputTab>("output");
   const [applyingFix, setApplyingFix] = useState<string | null>(null);
   const [appliedFix, setAppliedFix] = useState<string | null>(null);
+  const [focusedComponent, setFocusedComponent] = useState<string | null>(null);
 
   const insertTextRef = useRef<((text: string) => void) | null>(null);
 
@@ -89,8 +90,9 @@ export default function Home() {
       {
         onSuccess: (result) => {
           setCompileResult(result);
+          setFocusedComponent(null);
           if (result.success && result.netlist) {
-            setOutputTab("visualizer");
+            setOutputTab("tree");
           }
         },
       }
@@ -175,7 +177,7 @@ export default function Home() {
             setCompileResult(r);
             setApplyingFix(null);
             setAppliedFix(issue.code);
-            if (r.success && r.netlist) setOutputTab("visualizer");
+            if (r.success && r.netlist) setOutputTab("tree");
             // Clear the "applied" tick after 3 s
             setTimeout(() => setAppliedFix(null), 3000);
           },
@@ -383,7 +385,7 @@ export default function Home() {
                   { id: "output", icon: Activity, label: "COMPILER OUTPUT" },
                   { id: "bom", icon: BarChart2, label: "BOM", disabled: !compileResult?.success },
                   { id: "netlist", icon: List, label: "NETLIST", disabled: !compileResult?.netlist },
-                  { id: "visualizer", icon: Network, label: "SCHEMATIC", disabled: !compileResult?.netlist },
+                  { id: "tree", icon: Network, label: "SAFETY TREE", disabled: !compileResult?.netlist },
                 ] satisfies OutputTabDef[]
               ).map(({ id, icon: Icon, label, disabled }) => (
                 <button
@@ -423,7 +425,7 @@ export default function Home() {
             {/* Output panel content */}
             <div
               className="shrink-0 overflow-auto"
-              style={{ height: "220px", background: "#0D1117", borderTop: "1px solid #21262D" }}
+              style={{ height: "320px", background: "#0D1117", borderTop: "1px solid #21262D" }}
             >
               {outputTab === "output" && (() => {
                 const srcLines = source.split("\n");
@@ -471,7 +473,17 @@ export default function Home() {
                           const srcLine = srcLines[err.line - 1] ?? "";
                           const lineNum = String(err.line).padStart(4);
                           return (
-                            <div key={`e-${i}`} className="mb-3">
+                            <div
+                              key={`e-${i}`}
+                              className="mb-3 cursor-pointer rounded px-1 -mx-1 transition-colors"
+                              title="Click to locate in Safety Tree"
+                              onClick={() => {
+                                const compId = err.message.match(/'([^']+)'/)?.[1];
+                                if (compId) { setFocusedComponent(compId); setOutputTab("tree"); }
+                              }}
+                              onMouseEnter={(e) => { e.currentTarget.style.background = "#161B22"; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                            >
                               <div>
                                 <span style={{ color: "#F85149", fontWeight: "bold" }}>error</span>
                                 <span style={{ color: "#8B949E" }}>[</span>
@@ -505,7 +517,17 @@ export default function Home() {
                           const isVoltage = warn.warningCode === "W003";
                           const warnColor = isVoltage ? "#F0883E" : "#D29922";
                           return (
-                            <div key={`w-${i}`} className="mb-2">
+                            <div
+                              key={`w-${i}`}
+                              className="mb-2 cursor-pointer rounded px-1 -mx-1 transition-colors"
+                              title="Click to locate in Safety Tree"
+                              onClick={() => {
+                                const compId = warn.message.match(/'([^']+)'/)?.[1];
+                                if (compId) { setFocusedComponent(compId); setOutputTab("tree"); }
+                              }}
+                              onMouseEnter={(e) => { e.currentTarget.style.background = "#161B22"; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                            >
                               <div>
                                 <span style={{ color: warnColor, fontWeight: "bold" }}>warning</span>
                                 <span style={{ color: "#8B949E" }}>[</span>
@@ -617,8 +639,15 @@ export default function Home() {
                 <NetlistView netlist={compileResult.netlist} />
               )}
 
-              {outputTab === "visualizer" && compileResult?.netlist && (
-                <SchematicRenderer netlist={compileResult.netlist} />
+              {outputTab === "tree" && compileResult?.netlist && (
+                <CircuitSafetyTree
+                  netlist={compileResult.netlist}
+                  errors={compileResult.errors}
+                  warnings={compileResult.warnings}
+                  safetyIssues={compileResult.safetyIssues ?? []}
+                  focusedComponent={focusedComponent}
+                  onComponentFocus={setFocusedComponent}
+                />
               )}
             </div>
           </div>
