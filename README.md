@@ -35,6 +35,8 @@
 
 **CircuitRust** is a high-integrity Hardware Description DSL that revolutionizes circuit design. It shifts the workflow from error-prone "drag-and-drop" interfaces to a **Code-First** paradigm where strict electrical rules and safety checks are enforced at compile-time—just like Rust enforces memory safety.
 
+> 📝 **CircuitRust DSL** is inspired by Rust syntax (using `::` scope resolution, macros with `!`, and pattern matching), making it familiar to Rust developers while maintaining domain-specific circuit design semantics.
+
 ### 🚀 Key Features
 
 | Feature | Description |
@@ -46,20 +48,38 @@
 
 ### 💻 DSL Example
 
-```typescript
-// 1. Define power domains and load components
-const vcc   = Net.power(5.0);
-const motor = Component.DCMotor();
-const d_fly = Component.Diode({ model: "Schottky" });
+```circuit-dsl
+// Simple LED circuit with current-limiting resistor
+let vcc = Net::power(5.0);
+let gnd = Net::ground();
 
-// 2. Formal protection pattern (Inductive Load Protection)
-connect(d_fly.cathode, motor.m_pos);
-connect(d_fly.anode,   motor.m_neg);
+let r1 = Component::Resistor { resistance: "220" };
+let led1 = Component::LED { color: "red" };
 
-// 3. System integration
-connect(motor.m_pos, vcc);
+connect!(vcc => r1.pin1);
+connect!(r1.pin2 => led1.anode);
+connect!(led1.cathode => gnd);
+```
 
-// Output: Ready for KiCad export with full validation ✅
+### 💻 Advanced Example: Inductive Load Protection
+
+```circuit-dsl
+// DC Motor circuit with Flyback diode protection
+let vcc = Net::power(5.0);
+let gnd = Net::ground();
+
+let motor = Component::DCMotor;
+let d_fly = Component::Diode { model: "Schottky" };
+
+// Formal protection pattern (Flyback protection)
+connect!(d_fly.cathode => motor.m_pos);
+connect!(d_fly.anode => motor.m_neg);
+
+// System integration
+connect!(motor.m_pos => vcc);
+connect!(motor.m_neg => gnd);
+
+// ✅ Compiler validates: Flyback diode present ✓
 ```
 
 ### 🛠️ Workflow
@@ -100,6 +120,8 @@ connect(motor.m_pos, vcc);
 
 **CircuitRust** là một ngôn ngữ thiết kế phần cứng (DSL) cấp cao với triết lý an toàn từ Rust. Nó chuyển đổi quy trình thiết kế từ "kéo thả" dễ sai sang phương pháp **Code-First**, nơi mọi quy tắc điện tử được kiểm tra nghiêm ngặt ngay lúc biên dịch.
 
+> 📝 **CircuitRust DSL** lấy cảm hứng từ cú pháp Rust (dùng `::` scope resolution, macro với `!`, pattern matching), giúp nhà phát triển Rust dễ làm quen nhưng vẫn giữ ngữ nghĩa thiết kế mạch điều khiển.
+
 ### 🚀 Tính năng nổi bật
 
 | Tính năng | Mô tả |
@@ -111,20 +133,38 @@ connect(motor.m_pos, vcc);
 
 ### 💻 Ví dụ mã nguồn
 
-```typescript
-// 1. Khởi tạo miền nguồn và linh kiện tải
-const vcc   = Net.power(5.0);
-const motor = Component.DCMotor();
-const d_fly = Component.Diode({ model: "Schottky" });
+```circuit-dsl
+// Mạch LED đơn giản với điện trở giới hạn dòng
+let vcc = Net::power(5.0);
+let gnd = Net::ground();
 
-// 2. Cấu trúc bảo vệ tải cảm (Flyback Protection)
-connect(d_fly.cathode, motor.m_pos);
-connect(d_fly.anode,   motor.m_neg);
+let r1 = Component::Resistor { resistance: "220" };
+let led1 = Component::LED { color: "red" };
 
-// 3. Kết nối vào hệ thống
-connect(motor.m_pos, vcc);
+connect!(vcc => r1.pin1);
+connect!(r1.pin2 => led1.anode);
+connect!(led1.cathode => gnd);
+```
 
-// Kết quả: Sẵn sàng xuất KiCad với xác thực đầy đủ ✅
+### 💻 Ví dụ nâng cao: Bảo vệ tải cảm
+
+```circuit-dsl
+// Mạch động cơ DC với Flyback diode
+let vcc = Net::power(5.0);
+let gnd = Net::ground();
+
+let motor = Component::DCMotor;
+let d_fly = Component::Diode { model: "Schottky" };
+
+// Cấu trúc bảo vệ Flyback
+connect!(d_fly.cathode => motor.m_pos);
+connect!(d_fly.anode => motor.m_neg);
+
+// Kết nối hệ thống
+connect!(motor.m_pos => vcc);
+connect!(motor.m_neg => gnd);
+
+// ✅ Trình biên dịch kiểm tra: Flyback diode đã có ✓
 ```
 
 ### 🛠️ Quy trình
@@ -165,6 +205,8 @@ connect(motor.m_pos, vcc);
 
 **CircuitRust** 是一款受 Rust 安全哲学启发的硬件描述语言（DSL）。它将电路设计从易出错的"拖拽式"界面转变为**代码优先（Code-First）**的工作流，在编译阶段即强制执行电气规则与安全检查。
 
+> 📝 **CircuitRust DSL** 采用 Rust 风格的语法（包括 `::` 作用域解析、`!` 宏与模式匹配），使 Rust 开发者容易上手，同时保留电路设计的领域语义。
+
 ### 🚀 核心特性
 
 | 特性 | 说明 |
@@ -176,20 +218,38 @@ connect(motor.m_pos, vcc);
 
 ### 💻 代码示例
 
-```typescript
-// 1. 定义电源域和负载元件
-const vcc   = Net.power(5.0);
-const motor = Component.DCMotor();
-const d_fly = Component.Diode({ model: "Schottky" });
+```circuit-dsl
+// 简单的 LED 电路（含限流电阻）
+let vcc = Net::power(5.0);
+let gnd = Net::ground();
 
-// 2. 感性负载保护模式（续流二极管）
-connect(d_fly.cathode, motor.m_pos);
-connect(d_fly.anode,   motor.m_neg);
+let r1 = Component::Resistor { resistance: "220" };
+let led1 = Component::LED { color: "red" };
 
-// 3. 接入系统电源
-connect(motor.m_pos, vcc);
+connect!(vcc => r1.pin1);
+connect!(r1.pin2 => led1.anode);
+connect!(led1.cathode => gnd);
+```
 
-// 输出: 可导出为 KiCad，已完全验证 ✅
+### 💻 高级示例：感性负载保护
+
+```circuit-dsl
+// 直流马达电路与续流二极管保护
+let vcc = Net::power(5.0);
+let gnd = Net::ground();
+
+let motor = Component::DCMotor;
+let d_fly = Component::Diode { model: "Schottky" };
+
+// 续流二极管保护模式
+connect!(d_fly.cathode => motor.m_pos);
+connect!(d_fly.anode => motor.m_neg);
+
+// 系统集成
+connect!(motor.m_pos => vcc);
+connect!(motor.m_neg => gnd);
+
+// ✅ 编译器验证：续流二极管已配置 ✓
 ```
 
 ### 🛠 工作流程
