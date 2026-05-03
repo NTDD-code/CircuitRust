@@ -27,9 +27,10 @@ interface CircuitEditorProps {
   onCompile: () => void;
   errors?: CompileError[];
   onInsertText?: (cb: (text: string) => void) => void;
+  onScrollToLine?: (cb: (line: number) => void) => void;
 }
 
-export function CircuitEditor({ value, onChange, onCompile, errors, onInsertText }: CircuitEditorProps) {
+export function CircuitEditor({ value, onChange, onCompile, errors, onInsertText, onScrollToLine }: CircuitEditorProps) {
   const monacoRef = useRef<Monaco | null>(null);
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
 
@@ -212,6 +213,25 @@ export function CircuitEditor({ value, onChange, onCompile, errors, onInsertText
     onInsertText((text: string) => {
       if (editorRef.current) {
         editorRef.current.setValue(text);
+      }
+    });
+  }
+
+  if (onScrollToLine) {
+    onScrollToLine((line: number) => {
+      const editor = editorRef.current;
+      if (!editor) return;
+      editor.revealLineInCenter(line);
+      editor.setPosition({ lineNumber: line, column: 1 });
+      editor.focus();
+      const model = editor.getModel();
+      if (model) {
+        editor.setSelection({
+          startLineNumber: line,
+          startColumn: 1,
+          endLineNumber: line,
+          endColumn: model.getLineLength(line) + 1,
+        });
       }
     });
   }

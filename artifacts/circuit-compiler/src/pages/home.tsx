@@ -79,6 +79,7 @@ export default function Home() {
 
   const insertTextRef     = useRef<((text: string) => void) | null>(null);
   const handleCompileRef  = useRef<() => void>(() => {});
+  const scrollToLineRef   = useRef<((line: number) => void) | null>(null);
 
   const compileMutation = useCompileCircuit();
   const exportMutation = useExportNetlist();
@@ -159,6 +160,39 @@ export default function Home() {
   const registerInsert = useCallback((cb: (text: string) => void) => {
     insertTextRef.current = cb;
   }, []);
+
+  const registerScrollToLine = useCallback((cb: (line: number) => void) => {
+    scrollToLineRef.current = cb;
+  }, []);
+
+  const handleTraceToCode = useCallback((compId: string, pinName?: string) => {
+    if (!scrollToLineRef.current) return;
+    const lines = source.split("\n");
+    let targetLine = -1;
+
+    if (pinName) {
+      for (let i = 0; i < lines.length; i++) {
+        if (lines[i].includes(`${compId}.${pinName}`)) {
+          targetLine = i + 1;
+          break;
+        }
+      }
+    }
+
+    if (targetLine === -1) {
+      const re = new RegExp(`\\blet\\s+${compId}\\b`);
+      for (let i = 0; i < lines.length; i++) {
+        if (re.test(lines[i])) {
+          targetLine = i + 1;
+          break;
+        }
+      }
+    }
+
+    if (targetLine !== -1) {
+      scrollToLineRef.current(targetLine);
+    }
+  }, [source]);
 
   const handleApplyFix = useCallback((issue: SafetyIssue) => {
     const result = generateFix(issue.code, issue.detail ?? issue.message, source);
@@ -426,6 +460,7 @@ export default function Home() {
                 onCompile={handleCompile}
                 errors={compileResult?.errors}
                 onInsertText={registerInsert}
+                onScrollToLine={registerScrollToLine}
               />
             </div>
 
@@ -701,6 +736,8 @@ export default function Home() {
                   safetyIssues={compileResult.safetyIssues ?? []}
                   focusedComponent={focusedComponent}
                   onComponentFocus={setFocusedComponent}
+                  onTraceToCode={handleTraceToCode}
+                  healthScore={healthScore}
                 />
               )}
             </div>
