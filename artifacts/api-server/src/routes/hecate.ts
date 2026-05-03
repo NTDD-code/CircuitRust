@@ -129,18 +129,29 @@ router.post("/hecate/analyze", async (req, res) => {
         },
       ],
       config: {
-        maxOutputTokens: 8192,
+        maxOutputTokens: 32768,
         temperature: 0.15,
         systemInstruction: HECATE_UGLY_BUILD_PROMPT,
+        responseMimeType: "application/json",
+        thinkingConfig: { thinkingBudget: 0 },
       },
     });
 
     const rawText = response.text ?? "";
 
-    // Robustly extract JSON — handle markdown fences and extra prose
-    const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+    if (!rawText.trim()) {
+      req.log.error({ candidates: response.candidates }, "HECATE: empty response from Gemini");
+      res.status(500).json({ error: "HECATE received an empty response from the vision model. Try a clearer image." });
+      return;
+    }
+
+    // Strip markdown fences if the model ignored responseMimeType
+    const stripped = rawText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
+
+    // Extract outermost JSON object robustly
+    const jsonMatch = stripped.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      req.log.error({ rawText }, "HECATE: no JSON found in Gemini response");
+      req.log.error({ rawText: rawText.slice(0, 500) }, "HECATE: no JSON found in Gemini response");
       res.status(500).json({ error: "HECATE could not parse the circuit image. The model returned an unexpected format." });
       return;
     }
@@ -157,7 +168,7 @@ router.post("/hecate/analyze", async (req, res) => {
     try {
       out = JSON.parse(jsonMatch[0]) as typeof out;
     } catch {
-      req.log.error({ rawText }, "HECATE: JSON parse failed");
+      req.log.error({ rawText: rawText.slice(0, 500) }, "HECATE: JSON parse failed");
       res.status(500).json({ error: "HECATE returned malformed analysis. Try a clearer image or add a description." });
       return;
     }
