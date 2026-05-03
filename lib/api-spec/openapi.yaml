@@ -1,0 +1,724 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.3.0
+  description: Strict Circuit Compiler API
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: compiler
+    description: Circuit compiler operations
+  - name: llm
+    description: LLM circuit analysis
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /compiler/compile:
+    post:
+      operationId: compileCircuit
+      tags: [compiler]
+      summary: Compile a circuit definition
+      description: Parse, validate, and compile a Rust-inspired circuit definition
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompileRequest"
+      responses:
+        "200":
+          description: Compilation result (may include errors)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompileResult"
+
+  /compiler/examples:
+    get:
+      operationId: getExamples
+      tags: [compiler]
+      summary: Get example circuit definitions
+      responses:
+        "200":
+          description: List of example circuits
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExampleList"
+
+  /compiler/components:
+    get:
+      operationId: getComponentLibrary
+      tags: [compiler]
+      summary: Get full component library
+      description: Returns all available component definitions with pin metadata
+      responses:
+        "200":
+          description: Full component library
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComponentLibrary"
+
+  /compiler/export:
+    post:
+      operationId: exportNetlist
+      tags: [compiler]
+      summary: Export netlist to KiCad or Proteus format
+      description: Generate a standard .net file for KiCad or Proteus import
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExportRequest"
+      responses:
+        "200":
+          description: Exported netlist file content
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExportResult"
+
+  /hecate/analyze:
+    post:
+      operationId: hecateAnalyze
+      tags: [llm]
+      summary: HECATE — AI vision reverse-engineering of PCB photos
+      description: Upload a PCB photo as base64; Gemini Vision returns CircuitRust DSL code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HecateAnalyzeRequest"
+      responses:
+        "200":
+          description: Reverse-engineered DSL + analysis narrative
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HecateAnalyzeResult"
+
+  /llm/analyze:
+    post:
+      operationId: analyzeCircuitSafety
+      tags: [llm]
+      summary: Analyze circuit safety with LLM
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LlmAnalyzeRequest"
+      responses:
+        "200":
+          description: LLM safety analysis result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LlmAnalyzeResult"
+
+  /ai/chat:
+    post:
+      operationId: aiChat
+      tags: [llm]
+      summary: Chat with AI provider (cloud Anthropic or local Ollama)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AiChatRequest"
+      responses:
+        "200":
+          description: AI response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiChatResult"
+
+  /ollama/models:
+    post:
+      operationId: getOllamaModels
+      tags: [llm]
+      summary: Get available Ollama models
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OllamaModelsRequest"
+      responses:
+        "200":
+          description: List of Ollama models
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OllamaModelsResult"
+
+  /ollama/status:
+    post:
+      operationId: checkOllamaStatus
+      tags: [llm]
+      summary: Check if Ollama is reachable
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OllamaStatusRequest"
+      responses:
+        "200":
+          description: Ollama status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OllamaStatusResult"
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+    CompileRequest:
+      type: object
+      properties:
+        source:
+          type: string
+          description: Rust-inspired circuit definition source code
+      required:
+        - source
+
+    CompileResult:
+      type: object
+      properties:
+        success:
+          type: boolean
+        errors:
+          type: array
+          items:
+            $ref: "#/components/schemas/CompileError"
+        warnings:
+          type: array
+          items:
+            $ref: "#/components/schemas/CompileWarning"
+        safetyIssues:
+          type: array
+          items:
+            $ref: "#/components/schemas/SafetyIssue"
+        testResults:
+          type: array
+          items:
+            $ref: "#/components/schemas/TestResult"
+        netlist:
+          $ref: "#/components/schemas/Netlist"
+      required:
+        - success
+        - errors
+        - warnings
+        - safetyIssues
+
+    TestResult:
+      type: object
+      properties:
+        description:
+          type: string
+        passed:
+          type: boolean
+        assertions:
+          type: array
+          items:
+            $ref: "#/components/schemas/AssertionResult"
+      required:
+        - description
+        - passed
+        - assertions
+
+    AssertionResult:
+      type: object
+      properties:
+        code:
+          type: string
+        passed:
+          type: boolean
+        message:
+          type: string
+        expected:
+          type: string
+        actual:
+          type: string
+      required:
+        - code
+        - passed
+        - message
+
+    SafetyIssue:
+      type: object
+      properties:
+        severity:
+          type: string
+          enum: [CRITICAL, FATAL, WARNING, DANGER]
+        code:
+          type: string
+        message:
+          type: string
+        line:
+          type: integer
+        detail:
+          type: string
+      required:
+        - severity
+        - code
+        - message
+        - line
+
+    CompileError:
+      type: object
+      properties:
+        line:
+          type: integer
+        column:
+          type: integer
+        message:
+          type: string
+        errorCode:
+          type: string
+        severity:
+          type: string
+          enum: [error, fatal]
+      required:
+        - line
+        - column
+        - message
+        - errorCode
+        - severity
+
+    CompileWarning:
+      type: object
+      properties:
+        line:
+          type: integer
+        column:
+          type: integer
+        message:
+          type: string
+        warningCode:
+          type: string
+      required:
+        - line
+        - column
+        - message
+        - warningCode
+
+    Netlist:
+      type: object
+      properties:
+        components:
+          type: array
+          items:
+            $ref: "#/components/schemas/NetlistComponent"
+        connections:
+          type: array
+          items:
+            $ref: "#/components/schemas/NetlistConnection"
+        nets:
+          type: array
+          items:
+            $ref: "#/components/schemas/Net"
+      required:
+        - components
+        - connections
+        - nets
+
+    NetlistComponent:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+        category:
+          type: string
+          enum: [passive, active_discrete, active_ic, sensor, module, power, actuator]
+        voltageLevel:
+          type: number
+        pins:
+          type: array
+          items:
+            $ref: "#/components/schemas/Pin"
+        properties:
+          type: object
+          additionalProperties:
+            type: string
+      required:
+        - id
+        - name
+        - type
+        - category
+        - pins
+
+    Pin:
+      type: object
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          enum: [power, ground, signal, analog, digital, bidirectional, passive]
+        direction:
+          type: string
+          enum: [in, out, passive, power, ground, open_collector, bidirectional]
+        maxVoltage:
+          type: number
+        driveVoltage:
+          type: number
+        pinNumber:
+          type: integer
+        required:
+          type: boolean
+        net:
+          type: string
+      required:
+        - name
+        - type
+        - direction
+        - pinNumber
+
+    NetlistConnection:
+      type: object
+      properties:
+        from:
+          type: string
+        fromPin:
+          type: string
+        to:
+          type: string
+        toPin:
+          type: string
+        net:
+          type: string
+      required:
+        - from
+        - fromPin
+        - to
+        - toPin
+        - net
+
+    Net:
+      type: object
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          enum: [power, ground, signal, nc]
+        voltage:
+          type: number
+      required:
+        - name
+        - type
+
+    ExampleList:
+      type: object
+      properties:
+        examples:
+          type: array
+          items:
+            $ref: "#/components/schemas/Example"
+      required:
+        - examples
+
+    Example:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        source:
+          type: string
+      required:
+        - name
+        - description
+        - source
+
+    ComponentLibrary:
+      type: object
+      properties:
+        components:
+          type: array
+          items:
+            $ref: "#/components/schemas/ComponentInfo"
+      required:
+        - components
+
+    ComponentInfo:
+      type: object
+      properties:
+        type:
+          type: string
+        category:
+          type: string
+          enum: [passive, active_discrete, active_ic, sensor, module, power, actuator]
+        description:
+          type: string
+        aliases:
+          type: array
+          items:
+            type: string
+        voltageLevel:
+          type: number
+        pins:
+          type: array
+          items:
+            $ref: "#/components/schemas/Pin"
+      required:
+        - type
+        - category
+        - description
+        - pins
+
+    ExportRequest:
+      type: object
+      properties:
+        netlist:
+          $ref: "#/components/schemas/Netlist"
+        format:
+          type: string
+          enum: [kicad, proteus, spice]
+          default: kicad
+        title:
+          type: string
+      required:
+        - netlist
+
+    ExportResult:
+      type: object
+      properties:
+        content:
+          type: string
+          description: File content of the exported netlist
+        filename:
+          type: string
+        format:
+          type: string
+      required:
+        - content
+        - filename
+        - format
+
+    LlmAnalyzeRequest:
+      type: object
+      properties:
+        source:
+          type: string
+        netlist:
+          $ref: "#/components/schemas/Netlist"
+      required:
+        - source
+
+    LlmAnalyzeResult:
+      type: object
+      properties:
+        safetyScore:
+          type: integer
+          minimum: 0
+          maximum: 100
+        analysis:
+          type: string
+        risks:
+          type: array
+          items:
+            $ref: "#/components/schemas/RiskItem"
+        suggestions:
+          type: array
+          items:
+            type: string
+        model:
+          type: string
+      required:
+        - safetyScore
+        - analysis
+        - risks
+        - suggestions
+        - model
+
+    RiskItem:
+      type: object
+      properties:
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+        description:
+          type: string
+        component:
+          type: string
+      required:
+        - severity
+        - description
+
+    HecateAnalyzeRequest:
+      type: object
+      properties:
+        imageBase64:
+          type: string
+          description: Base64-encoded image data (JPEG or PNG)
+        mimeType:
+          type: string
+          description: MIME type of the image
+          enum: ["image/jpeg", "image/png", "image/webp"]
+        description:
+          type: string
+          description: Optional functional description to guide reconstruction (HECATE Guidance)
+      required:
+        - imageBase64
+        - mimeType
+
+    HecateAnalyzeResult:
+      type: object
+      properties:
+        dslCode:
+          type: string
+          description: Reverse-engineered CircuitRust DSL code
+        analysis:
+          type: string
+          description: Human-readable narrative of what HECATE found
+        confidence:
+          type: number
+          description: Confidence score 0-100
+        componentCount:
+          type: integer
+          description: Number of components identified
+        reconstructionMode:
+          type: string
+          description: How the netlist was reconstructed
+          enum: ["vision-only", "description-guided", "merged"]
+        uglyBuildDetected:
+          type: boolean
+          description: Whether HECATE detected messy/dangerous physical build quality
+        safetyNote:
+          type: string
+          description: Physical safety note about the build quality (present when uglyBuildDetected)
+      required:
+        - dslCode
+        - analysis
+        - confidence
+        - componentCount
+        - reconstructionMode
+        - uglyBuildDetected
+
+    AiChatRequest:
+      type: object
+      properties:
+        provider:
+          type: string
+          enum: [cloud, local, google]
+        model:
+          type: string
+        systemPrompt:
+          type: string
+        userMessage:
+          type: string
+        apiKey:
+          type: string
+          description: Optional API key override (used for cloud/Anthropic provider)
+        googleApiKey:
+          type: string
+          description: Google API key (used for google/Gemini provider)
+        ollamaUrl:
+          type: string
+          description: Ollama base URL (required for local provider)
+      required:
+        - provider
+        - model
+        - systemPrompt
+        - userMessage
+
+    AiChatResult:
+      type: object
+      properties:
+        response:
+          type: string
+        provider:
+          type: string
+        model:
+          type: string
+      required:
+        - response
+        - provider
+        - model
+
+    OllamaModelsRequest:
+      type: object
+      properties:
+        baseUrl:
+          type: string
+      required:
+        - baseUrl
+
+    OllamaModel:
+      type: object
+      properties:
+        name:
+          type: string
+        size:
+          type: number
+        modified:
+          type: string
+      required:
+        - name
+        - size
+
+    OllamaModelsResult:
+      type: object
+      properties:
+        models:
+          type: array
+          items:
+            $ref: "#/components/schemas/OllamaModel"
+        alive:
+          type: boolean
+      required:
+        - models
+        - alive
+
+    OllamaStatusRequest:
+      type: object
+      properties:
+        baseUrl:
+          type: string
+      required:
+        - baseUrl
+
+    OllamaStatusResult:
+      type: object
+      properties:
+        alive:
+          type: boolean
+        version:
+          type: string
+      required:
+        - alive
