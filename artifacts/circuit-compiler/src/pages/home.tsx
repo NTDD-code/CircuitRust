@@ -852,7 +852,7 @@ export default function Home() {
                           const col0    = Math.max(0, (err.column ?? 1) - 1);
                           // caret: spaces up to column, then ^~~~
                           const caretPad    = " ".repeat(col0);
-                          const caretSpan   = srcLine.length > col0 ? "^" + "~".repeat(Math.min(srcLine.slice(col0).trimEnd().length - 1, 30)) : "^";
+                          const caretSpan   = srcLine.length > col0 ? "^" + "~".repeat(Math.max(0, Math.min(srcLine.slice(col0).trimEnd().length - 1, 30))) : "^";
                           return (
                             <div
                               key={`e-${i}`}
@@ -906,7 +906,7 @@ export default function Home() {
                           const warnColor = isVoltage ? "#F0883E" : "#D29922";
                           const col0    = Math.max(0, (warn.column ?? 1) - 1);
                           const caretPad  = " ".repeat(col0);
-                          const caretSpan = srcLine.length > col0 ? "^" + "~".repeat(Math.min(srcLine.slice(col0).trimEnd().length - 1, 30)) : "^";
+                          const caretSpan = srcLine.length > col0 ? "^" + "~".repeat(Math.max(0, Math.min(srcLine.slice(col0).trimEnd().length - 1, 30))) : "^";
                           return (
                             <div
                               key={`w-${i}`}
