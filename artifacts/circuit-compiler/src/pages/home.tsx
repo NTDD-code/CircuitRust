@@ -38,6 +38,9 @@ import {
   Package,
   FlaskConical,
   Eye,
+  FilePlus,
+  Copy,
+  Check,
 } from "lucide-react";
 import { SplashScreen } from "@/components/splash-screen";
 import { CircuitEditor } from "@/components/circuit-editor";
@@ -124,6 +127,7 @@ export default function Home() {
   const [focusedComponent, setFocusedComponent] = useState<string | null>(null);
   const [showSuccess, setShowSuccess] = useState(false);
   const [bundleLoading, setBundleLoading] = useState(false);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   // ── HECATE Vision state ─────────────────────────────────────────────────────
   const [hecateOpen, setHecateOpen]       = useState(false);
@@ -339,6 +343,31 @@ export default function Home() {
     setHecateError(null);
   }, []);
 
+  // ── New blank file ──────────────────────────────────────────────────────────
+  const handleNewFile = useCallback(() => {
+    const blank = "";
+    setSource(blank);
+    if (insertTextRef.current) insertTextRef.current(blank);
+    setCompileResult(null);
+    setAnalysisResult(null);
+    setHecateRevealData(null);
+    setHecateResult(null);
+    setHecateError(null);
+    setFocusedComponent(null);
+    setAppliedFix(null);
+    setApplyingFix(null);
+    setShowSuccess(false);
+    setOutputTab("output");
+    setCopiedKey(null);
+  }, []);
+
+  // ── Copy error / warning text to clipboard ──────────────────────────────────
+  const handleCopyDiag = useCallback((key: string, text: string) => {
+    navigator.clipboard.writeText(text).catch(() => {});
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey((k) => (k === key ? null : k)), 2000);
+  }, []);
+
   // ── Production Bundle download ─────────────────────────────────────────────
   const handleDownloadBundle = useCallback(async () => {
     if (!compileResult?.netlist || !compileResult.success) return;
@@ -426,6 +455,8 @@ export default function Home() {
       document.body.appendChild(a);
       a.click();
       setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
+    } catch {
+      // Export or zip failure — silently recover; bundleLoading is reset in finally
     } finally {
       setBundleLoading(false);
     }
@@ -541,6 +572,17 @@ export default function Home() {
               title="AI Provider Settings"
             >
               <Settings className="w-4 h-4" />
+            </Button>
+
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-8 w-8"
+              style={{ color: "#6E7681" }}
+              onClick={handleNewFile}
+              title="New blank circuit — clears editor and all results"
+            >
+              <FilePlus className="w-4 h-4" />
             </Button>
 
             <div className="w-px h-5 mx-1" style={{ background: "#30363D" }} />
@@ -850,30 +892,43 @@ export default function Home() {
                           const srcLine = srcLines[err.line - 1] ?? "";
                           const lineNum = String(err.line).padStart(4);
                           const col0    = Math.max(0, (err.column ?? 1) - 1);
-                          // caret: spaces up to column, then ^~~~
                           const caretPad    = " ".repeat(col0);
                           const caretSpan   = srcLine.length > col0 ? "^" + "~".repeat(Math.max(0, Math.min(srcLine.slice(col0).trimEnd().length - 1, 30))) : "^";
+                          const copyKey = `e-${i}`;
+                          const copyText = `error[${err.errorCode}]: ${err.message}\n --> circuit.src:${err.line}:${err.column}${srcLine ? `\n${lineNum} | ${srcLine}\n     | ${caretPad}${caretSpan}` : ""}`;
                           return (
                             <div
-                              key={`e-${i}`}
-                              className="mb-3 cursor-pointer rounded px-1 -mx-1 transition-colors"
-                              title="Click to locate in Safety Tree"
-                              onClick={() => {
-                                const compId = err.message.match(/'([^']+)'/)?.[1];
-                                if (compId) { setFocusedComponent(compId); setOutputTab("tree"); }
-                              }}
+                              key={copyKey}
+                              className="mb-3 rounded px-1 -mx-1 transition-colors relative group"
                               onMouseEnter={(e) => { e.currentTarget.style.background = "#161B22"; }}
                               onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                             >
-                              {/* error[EXXX]: message */}
-                              <div>
+                              {/* copy button */}
+                              <button
+                                onClick={() => handleCopyDiag(copyKey, copyText)}
+                                className="absolute top-0 right-0 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                                title="Copy error"
+                                style={{ color: copiedKey === copyKey ? "#3FB950" : "#6E7681" }}
+                              >
+                                {copiedKey === copyKey
+                                  ? <Check className="w-3 h-3" />
+                                  : <Copy className="w-3 h-3" />}
+                              </button>
+                              {/* error[EXXX]: message — also click to locate in Safety Tree */}
+                              <div
+                                className="cursor-pointer"
+                                title="Click to locate in Safety Tree"
+                                onClick={() => {
+                                  const compId = err.message.match(/'([^']+)'/)?.[1];
+                                  if (compId) { setFocusedComponent(compId); setOutputTab("tree"); }
+                                }}
+                              >
                                 <span style={{ color: "#FF2D55", fontWeight: "bold" }}>error</span>
                                 <span style={{ color: "#8B949E" }}>[</span>
                                 <span style={{ color: "#FF6B6B", fontWeight: "bold" }}>{err.errorCode}</span>
                                 <span style={{ color: "#8B949E" }}>]</span>
                                 <span style={{ color: "#F85149" }}>: {err.message}</span>
                               </div>
-                              {/* --> circuit.src:L:C  (bold white path) */}
                               <div>
                                 <span style={{ color: "#8B949E" }}> --&gt; </span>
                                 <span style={{ color: "#E6EDF3", fontWeight: "bold" }}>circuit.src</span>
@@ -907,27 +962,41 @@ export default function Home() {
                           const col0    = Math.max(0, (warn.column ?? 1) - 1);
                           const caretPad  = " ".repeat(col0);
                           const caretSpan = srcLine.length > col0 ? "^" + "~".repeat(Math.max(0, Math.min(srcLine.slice(col0).trimEnd().length - 1, 30))) : "^";
+                          const copyKey = `w-${i}`;
+                          const copyText = `warning[${warn.warningCode}]: ${warn.message}\n --> circuit.src:${warn.line}:${warn.column}${srcLine ? `\n${lineNum} | ${srcLine}\n     | ${caretPad}${caretSpan}` : ""}`;
                           return (
                             <div
-                              key={`w-${i}`}
-                              className="mb-2 cursor-pointer rounded px-1 -mx-1 transition-colors"
-                              title="Click to locate in Safety Tree"
-                              onClick={() => {
-                                const compId = warn.message.match(/'([^']+)'/)?.[1];
-                                if (compId) { setFocusedComponent(compId); setOutputTab("tree"); }
-                              }}
+                              key={copyKey}
+                              className="mb-2 rounded px-1 -mx-1 transition-colors relative group"
                               onMouseEnter={(e) => { e.currentTarget.style.background = "#161B22"; }}
                               onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                             >
-                              {/* warning[WXXX]: message */}
-                              <div>
+                              {/* copy button */}
+                              <button
+                                onClick={() => handleCopyDiag(copyKey, copyText)}
+                                className="absolute top-0 right-0 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                                title="Copy warning"
+                                style={{ color: copiedKey === copyKey ? "#3FB950" : "#6E7681" }}
+                              >
+                                {copiedKey === copyKey
+                                  ? <Check className="w-3 h-3" />
+                                  : <Copy className="w-3 h-3" />}
+                              </button>
+                              {/* warning[WXXX]: message — click to locate in Safety Tree */}
+                              <div
+                                className="cursor-pointer"
+                                title="Click to locate in Safety Tree"
+                                onClick={() => {
+                                  const compId = warn.message.match(/'([^']+)'/)?.[1];
+                                  if (compId) { setFocusedComponent(compId); setOutputTab("tree"); }
+                                }}
+                              >
                                 <span style={{ color: warnColor, fontWeight: "bold" }}>warning</span>
                                 <span style={{ color: "#8B949E" }}>[</span>
                                 <span style={{ color: warnColor, fontWeight: "bold" }}>{warn.warningCode}</span>
                                 <span style={{ color: "#8B949E" }}>]</span>
                                 <span style={{ color: warnColor }}>: {warn.message}</span>
                               </div>
-                              {/* --> circuit.src:L:C */}
                               <div>
                                 <span style={{ color: "#8B949E" }}> --&gt; </span>
                                 <span style={{ color: "#E6EDF3", fontWeight: "bold" }}>circuit.src</span>
