@@ -157,6 +157,12 @@ export default function Home() {
   const { data: libraryData } = useGetComponentLibrary({ query: { queryKey: getGetComponentLibraryQueryKey() } });
 
   const handleCompile = useCallback(() => {
+    if (!source.trim()) {
+      setCompileResult(null);
+      setAnalysisResult(null);
+      setOutputTab("output");
+      return;
+    }
     setCompileResult(null);
     setAnalysisResult(null);
     setOutputTab("output");
@@ -179,6 +185,17 @@ export default function Home() {
       }
     );
   }, [source, compileMutation]);
+
+  const handleSourceChange = useCallback((value: string) => {
+    setSource(value);
+    if (!value.trim()) {
+      setCompileResult(null);
+      setAnalysisResult(null);
+      setHecateRevealData(null);
+      setFocusedComponent(null);
+      setOutputTab("output");
+    }
+  }, []);
 
   const handleExport = (format: "kicad" | "proteus" | "spice") => {
     if (!compileResult?.netlist) return;
@@ -485,7 +502,7 @@ export default function Home() {
   // Auto-compile: 1.5 s debounce after every keystroke
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (!compileMutation.isPending) handleCompileRef.current();
+      if (source.trim() && !compileMutation.isPending) handleCompileRef.current();
     }, 1500);
     return () => clearTimeout(timer);
   }, [source]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -804,7 +821,7 @@ export default function Home() {
               </div>
               <CircuitEditor
                 value={source}
-                onChange={setSource}
+                onChange={handleSourceChange}
                 onCompile={handleCompile}
                 errors={compileResult?.errors}
                 onInsertText={registerInsert}
