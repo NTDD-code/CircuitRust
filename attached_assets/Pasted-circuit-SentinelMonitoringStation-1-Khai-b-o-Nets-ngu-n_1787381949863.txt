@@ -1,0 +1,133 @@
+circuit SentinelMonitoringStation {
+  // 1. Khai báo Nets nguồn, mass và no-connect
+  let vcc5 = Net::VCC { voltage: 5.0 };
+  let vcc3v3 = Net::VCC { voltage: 3.3 };
+  let gnd = Net::GND;
+  let nc_net = Net::nc();
+
+  // 2. Khai báo Vi điều khiển & Cảm biến
+  let mcu = Component::ArduinoUno;
+  let sensor_imu = Component::MPU6050;
+  let sensor_sonar = Component::Ultrasonic;
+  let sensor_env = Component::DHT22;
+
+  // 3. Khai báo Level Shifter chuyển đổi logic 5V <-> 3.3V cho I2C
+  let ls_scl = Component::LevelShifter;
+  let ls_sda = Component::LevelShifter;
+
+  // 4. Khai báo Tụ lọc nhiễu 100nF cho từng IC/Module
+  let c_mcu = Component::Capacitor { capacitance: "100nF" };
+  let c_imu = Component::Capacitor { capacitance: "100nF" };
+  let c_sonar = Component::Capacitor { capacitance: "100nF" };
+  let c_env = Component::Capacitor { capacitance: "100nF" };
+
+  // 5. Khai báo Cụm LED cảnh báo
+  let r_led = Component::Resistor { resistance: "220" };
+  let led_alert = Component::LED { color: "red" };
+
+  // 6. Khai báo Cụm Còi báo (Transistor + Flyback Diode)
+  let r_base = Component::Resistor { resistance: "1000" };
+  let q_buzzer = Component::NPN { model: "2N2222" };
+  let d_flyback = Component::Diode;
+  let buzzer = Component::Buzzer;
+
+  // --- KẾT NỐI HỆ THỐNG ---
+
+  // Nguồn cấp & Tụ lọc MCU
+  connect!(vcc5 -> mcu.vcc);
+  connect!(vcc3v3 -> mcu.v3v3);
+  connect!(gnd -> mcu.gnd);
+  connect!(vcc5 -> c_mcu.pin1);
+  connect!(c_mcu.pin2 -> gnd);
+
+  // Cố định chân địa chỉ theo chuẩn E014
+  connect!(mcu.a0 -> gnd);
+  connect!(mcu.a1 -> gnd);
+  connect!(mcu.a2 -> gnd);
+
+  // Đóng các chân không dùng vào nc_net (Khắc phục W005)
+  connect!(mcu.d0 -> nc_net);
+  connect!(mcu.d1 -> nc_net);
+  connect!(mcu.d8 -> nc_net);
+  connect!(mcu.d9 -> nc_net);
+  connect!(mcu.d10 -> nc_net);
+  connect!(mcu.d11 -> nc_net);
+  connect!(mcu.d12 -> nc_net);
+  connect!(mcu.d13 -> nc_net);
+  connect!(mcu.a3 -> nc_net);
+  connect!(mcu.a4 -> nc_net);
+  connect!(mcu.a5 -> nc_net);
+  connect!(mcu.tx -> nc_net);
+  connect!(mcu.rx -> nc_net);
+  connect!(mcu.reset -> nc_net);
+  connect!(mcu.aref -> nc_net);
+
+  // Cảm biến IMU 6 trục MPU6050 (3.3V) & Tụ lọc
+  connect!(vcc3v3 -> sensor_imu.vcc);
+  connect!(gnd -> sensor_imu.gnd);
+  connect!(mcu.d2 -> sensor_imu.int);
+  connect!(sensor_imu.ad0 -> gnd);
+  connect!(vcc3v3 -> c_imu.pin1);
+  connect!(c_imu.pin2 -> gnd);
+
+  // Mạch đệm Level Shifter cho đường truyền I2C (Khắc phục W003 / S003)
+  connect!(vcc3v3 -> ls_scl.lv);
+  connect!(vcc5 -> ls_scl.hv);
+  connect!(gnd -> ls_scl.gnd);
+  connect!(mcu.scl -> ls_scl.b);
+  connect!(ls_scl.a -> sensor_imu.scl);
+
+  connect!(vcc3v3 -> ls_sda.lv);
+  connect!(vcc5 -> ls_sda.hv);
+  connect!(gnd -> ls_sda.gnd);
+  connect!(mcu.sda -> ls_sda.b);
+  connect!(ls_sda.a -> sensor_imu.sda);
+
+  // Cảm biến môi trường DHT22 & Tụ lọc
+  connect!(vcc3v3 -> sensor_env.vcc);
+  connect!(gnd -> sensor_env.gnd);
+  connect!(mcu.d5 -> sensor_env.data);
+  connect!(sensor_env.nc -> nc_net);
+  connect!(vcc3v3 -> c_env.pin1);
+  connect!(c_env.pin2 -> gnd);
+
+  // Cảm biến Siêu âm Ultrasonic & Tụ lọc
+  connect!(vcc5 -> sensor_sonar.vcc);
+  connect!(gnd -> sensor_sonar.gnd);
+  connect!(mcu.d3 -> sensor_sonar.trigger);
+  connect!(mcu.d4 -> sensor_sonar.echo);
+  connect!(vcc5 -> c_sonar.pin1);
+  connect!(c_sonar.pin2 -> gnd);
+
+  // Cụm LED cảnh báo
+  connect!(mcu.d6 -> r_led.pin1);
+  connect!(r_led.pin2 -> led_alert.anode);
+  connect!(led_alert.cathode -> gnd);
+
+  // Cụm Còi báo công suất 5V & Flyback Diode
+  connect!(mcu.d7 -> r_base.pin1);
+  connect!(r_base.pin2 -> q_buzzer.base);
+  connect!(q_buzzer.emitter -> gnd);
+  connect!(vcc5 -> buzzer.vcc);
+  connect!(buzzer.gnd -> q_buzzer.collector);
+  connect!(vcc5 -> d_flyback.cathode);
+  connect!(d_flyback.anode -> q_buzzer.collector);
+}
+
+test "Verify Strict Design & Decoupling Compliance" {
+  assert_net_exists!(vcc5);
+  assert_net_exists!(vcc3v3);
+  assert_net_exists!(gnd);
+  assert_voltage!(vcc5, 5.0);
+  assert_voltage!(vcc3v3, 3.3);
+
+  // Kiểm tra liên kết an toàn & bảo vệ dòng
+  assert_connected!(r_led.pin2, led_alert.anode);
+  assert_connected!(r_base.pin2, q_buzzer.base);
+  assert_gt!(r_led.resistance, "100");
+  assert_gt!(r_base.resistance, "470");
+
+  // Kiểm tra Level Shifter
+  assert_component_exists!(ls_scl);
+  assert_component_exists!(ls_sda);
+}

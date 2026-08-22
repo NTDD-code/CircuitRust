@@ -55,8 +55,10 @@ function buildRefDesMap(components: NetlistComponent[]): Map<string, string> {
 }
 
 // ── KiCad footprint mapping ────────────────────────────────────────────────────
-// All entries use verified KiCad 7/8 standard library footprint IDs.
-// THT variants are preferred for hobbyist use (breadboard-friendly).
+// All entries should use KiCad library footprint IDs that are present in the
+// default KiCad 7/8 libraries. Generic pin headers are intentional for modules
+// and sensors whose exact board footprint is not part of the component model:
+// they import reliably and can be replaced later in KiCad.
 const KICAD_FOOTPRINTS: Record<string, string> = {
   // Passives — THT axial / disc
   Resistor:       "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal",
@@ -90,12 +92,12 @@ const KICAD_FOOTPRINTS: Record<string, string> = {
   LDO:              "Package_TO_SOT_THT:TO-252-2",
   BuckConverter:    "Converter_DCDC:Converter_DCDC_7-SMD_11.7x10.3mm_P2.3mm",
   BoostConverter:   "Converter_DCDC:Converter_DCDC_7-SMD_11.7x10.3mm_P2.3mm",
-  LevelShifter:     "Module:4xLevelShifter_4ch",
+  LevelShifter:     "Connector_PinHeader_2.54mm:PinHeader_1x05_P2.54mm_Vertical",
 
   // Sensors
   DHT11:          "Sensor:DHT11",
-  DHT22:          "Sensor:DHT22",
-  MPU6050:        "Sensor_Motion:InvenSense_MPU-6050_QFN-24_4x4mm_P0.5mm",
+  DHT22:          "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical",
+  MPU6050:        "Connector_PinHeader_2.54mm:PinHeader_1x06_P2.54mm_Vertical",
   Ultrasonic:     "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical",
   IRSensor:       "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical",
   PhotoResistor:  "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal",

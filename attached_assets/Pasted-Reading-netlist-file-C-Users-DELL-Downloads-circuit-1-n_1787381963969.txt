@@ -1,0 +1,39 @@
+Reading netlist file 'C:\Users\DELL\Downloads\circuit (1).net'. 
+Using tstamps (unique IDs) to match symbols and footprints. 
+Processing symbol 'U4:Module:4xLevelShifter_4ch'.
+Processing symbol 'C3:Capacitor_THT:C_Disc_D5.0mm_W2.5mm_P5.00mm'.
+Processing symbol 'C2:Capacitor_THT:C_Disc_D5.0mm_W2.5mm_P5.00mm'.
+Processing symbol 'C1:Capacitor_THT:C_Disc_D5.0mm_W2.5mm_P5.00mm'.
+Processing symbol 'U1:Sensor_Motion:InvenSense_MPU-6050_QFN-24_4x4mm_P0.5mm'.
+Processing symbol 'US1:Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical'.
+Processing symbol 'U2:Sensor:DHT22'.
+Processing symbol 'D2:Diode_THT:D_DO-41_SOD81_P10.16mm_Horizontal'.
+Processing symbol 'R1:Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal'.
+Processing symbol 'MCU1:Module:Arduino_UNO_R3'.
+Processing symbol 'R2:Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal'.
+Processing symbol 'D1:LED_THT:LED_D5.0mm'.
+Processing symbol 'Q1:Package_TO_SOT_THT:TO-92_Inline'.
+Processing symbol 'U3:Module:4xLevelShifter_4ch'.
+Processing symbol 'C4:Capacitor_THT:C_Disc_D5.0mm_W2.5mm_P5.00mm'.
+Processing symbol 'BZ1:Buzzer_Beeper:Buzzer_12x9.5RM7.6'.
+Add Q1 (footprint 'Package_TO_SOT_THT:TO-92_Inline').
+Add MCU1 (footprint 'Module:Arduino_UNO_R3').
+Add BZ1 (footprint 'Buzzer_Beeper:Buzzer_12x9.5RM7.6').
+Add D1 (footprint 'LED_THT:LED_D5.0mm').
+Add D2 (footprint 'Diode_THT:D_DO-41_SOD81_P10.16mm_Horizontal').
+Add US1 (footprint 'Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical').
+Add C1 (footprint 'Capacitor_THT:C_Disc_D5.0mm_W2.5mm_P5.00mm').
+Add C2 (footprint 'Capacitor_THT:C_Disc_D5.0mm_W2.5mm_P5.00mm').
+Add C3 (footprint 'Capacitor_THT:C_Disc_D5.0mm_W2.5mm_P5.00mm').
+Add R1 (footprint 'Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal').
+Add C4 (footprint 'Capacitor_THT:C_Disc_D5.0mm_W2.5mm_P5.00mm').
+Add R2 (footprint 'Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal').
+Error: U3 footprint '4xLevelShifter_4ch' not found in any libraries in the footprint library table.
+Error: Cannot add U3 (footprint 'Module:4xLevelShifter_4ch' not found).
+Error: U2 footprint 'DHT22' not found in any libraries in the footprint library table.
+Error: Cannot add U1 (footprint 'Sensor_Motion:InvenSense_MPU-6050_QFN-24_4x4mm_P0.5mm' not found).
+Error: Cannot add U4 (footprint 'Module:4xLevelShifter_4ch' not found).
+Error: U4 footprint '4xLevelShifter_4ch' not found in any libraries in the footprint library table.
+Error: Cannot add U2 (footprint 'Sensor:DHT22' not found).
+Error: U1 footprint 'InvenSense_MPU-6050_QFN-24_4x4mm_P0.5mm' not found in any libraries in the footprint library table.
+Total warnings: 0, errors: 4.

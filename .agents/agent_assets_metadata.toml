@@ -1,0 +1,9 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "TBHOPEayFqFAN0dQdhDlX"
+uri = "file://attached_assets/sentinel_monitoring_station_fixed.net"
+type = "unspecified"
+title = "Sentinel Monitoring Station — KiCad Netlist đã sửa"
+description = "Netlist KiCad đã thay các footprint không tồn tại bằng footprint chân cắm chuẩn, có thể dùng để import vào KiCad."
