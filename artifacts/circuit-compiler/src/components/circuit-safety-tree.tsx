@@ -20,18 +20,6 @@ const TREE_STYLES = `
   }
   .pin-warn-pulse { animation: warn-pulse 2s ease-in-out infinite; }
 
-  @keyframes confetti-fall {
-    0%   { transform: translateY(0) rotate(0deg);    opacity: 1; }
-    80%  { opacity: 1; }
-    100% { transform: translateY(110vh) rotate(720deg); opacity: 0; }
-  }
-
-  @keyframes proto-pulse {
-    0%,100% { box-shadow: 0 0 0 0   rgba(63,185,80,0.55); }
-    50%      { box-shadow: 0 0 0 7px rgba(63,185,80,0);    }
-  }
-  .proto-ready { animation: proto-pulse 2s ease-in-out infinite; }
-
   @keyframes tooltip-in {
     from { opacity: 0; transform: translateX(-5px); }
     to   { opacity: 1; transform: translateX(0);    }
