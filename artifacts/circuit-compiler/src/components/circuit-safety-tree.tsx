@@ -378,12 +378,7 @@ export function CircuitSafetyTree({
 }: CircuitSafetyTreeProps) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [tooltip,  setTooltip]  = useState<TooltipData | null>(null);
-  const [showConfetti, setShowConfetti] = useState(false);
   const rowRefs       = useRef<Map<string, HTMLDivElement>>(new Map());
-  const confettiRef   = useRef<Array<{
-    id: number; color: string; x: number;
-    delay: number; duration: number; size: number;
-  }>>([]);
 
   const issues = useMemo<IssueRef[]>(
     () => [
@@ -414,23 +409,6 @@ export function CircuitSafetyTree({
 
   const testsPassed = testResults.filter((t) => t.passed).length;
   const testsTotal  = testResults.length;
-  const allTestsPass = testsTotal === 0 || testsPassed === testsTotal;
-
-  // Confetti when health = 100 AND all tests pass (or no tests defined)
-  useEffect(() => {
-    if (healthScore !== 100 || !allTestsPass) return;
-    confettiRef.current = Array.from({ length: 36 }, (_, i) => ({
-      id:       i,
-      color:    ["#3FB950","#58A6FF","#F0883E","#D29922","#BC8CFF","#FF79C6"][i % 6],
-      x:        2 + ((i * 13 + 5) % 96),
-      delay:    (i * 0.09) % 2.0,
-      duration: 2.2 + (i % 6) * 0.3,
-      size:     4 + (i % 5) * 2,
-    }));
-    setShowConfetti(true);
-    const t = setTimeout(() => setShowConfetti(false), 4800);
-    return () => clearTimeout(t);
-  }, [healthScore, allTestsPass]);
 
   const toggle = (id: string) => {
     setExpanded((prev) => {
@@ -459,27 +437,6 @@ export function CircuitSafetyTree({
     >
       <style>{TREE_STYLES}</style>
 
-      {/* ── Confetti overlay ── */}
-      {showConfetti && (
-        <div className="fixed inset-0 pointer-events-none z-[9998] overflow-hidden">
-          {confettiRef.current.map((p) => (
-            <div
-              key={p.id}
-              style={{
-                position:  "absolute",
-                left:      `${p.x}%`,
-                top:       "-12px",
-                width:     p.size,
-                height:    p.size,
-                background: p.color,
-                borderRadius: "2px",
-                animation: `confetti-fall ${p.duration}s ${p.delay}s linear forwards`,
-              }}
-            />
-          ))}
-        </div>
-      )}
-
       {/* ── Sticky header ── */}
       <div
         className="sticky top-0 z-10 flex items-center gap-2 px-3 h-8 border-b"
@@ -496,18 +453,14 @@ export function CircuitSafetyTree({
         {/* Health score badge */}
         {healthScore !== null && healthScore !== undefined && (
           <div
-            className={`flex items-center gap-1.5 px-2 py-0.5 rounded font-mono text-[9px] ml-1 ${healthScore === 100 ? "proto-ready" : ""}`}
+            className="flex items-center gap-1.5 px-2 py-0.5 rounded font-mono text-[9px] ml-1"
             style={{
               background:  `${hColor}14`,
               border:      `1px solid ${hColor}40`,
               color:        hColor,
             }}
           >
-            {healthScore === 100 ? (
-              <span className="font-bold tracking-wide">READY FOR PROTOTYPE 🎉</span>
-            ) : (
-              <span>Health: {healthScore}/100</span>
-            )}
+            <span>Health: {healthScore}/100</span>
           </div>
         )}
 

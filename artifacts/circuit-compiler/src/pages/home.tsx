@@ -127,7 +127,6 @@ export default function Home() {
   const [applyingFix, setApplyingFix] = useState<string | null>(null);
   const [appliedFix, setAppliedFix] = useState<string | null>(null);
   const [focusedComponent, setFocusedComponent] = useState<string | null>(null);
-  const [showSuccess, setShowSuccess] = useState(false);
   const [bundleLoading, setBundleLoading] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -379,7 +378,6 @@ export default function Home() {
     setFocusedComponent(null);
     setAppliedFix(null);
     setApplyingFix(null);
-    setShowSuccess(false);
     setOutputTab("output");
     setCopiedKey(null);
     setSavedAt(null);
@@ -511,16 +509,6 @@ export default function Home() {
     () => (compileResult ? calculateHealthScore(compileResult) : null),
     [compileResult],
   );
-
-  useEffect(() => {
-    if (healthScore !== 100) return;
-    const tr = compileResult?.testResults ?? [];
-    const allTestsPass = tr.length === 0 || tr.every((t) => t.passed);
-    if (!allTestsPass) return;
-    setShowSuccess(true);
-    const timer = setTimeout(() => setShowSuccess(false), 5000);
-    return () => clearTimeout(timer);
-  }, [healthScore, compileResult?.testResults]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSplashDone = useCallback(() => setShowSplash(false), []);
 
@@ -767,34 +755,6 @@ export default function Home() {
             </div>
           </div>
         )}
-
-        {/* ── Success toast ── */}
-        {showSuccess && (() => {
-          const tr = compileResult?.testResults ?? [];
-          const tp = tr.filter((t) => t.passed).length;
-          return (
-            <div className="fixed top-14 inset-x-0 flex justify-center z-50 pointer-events-none">
-              <div
-                className="flex items-center gap-3 px-5 py-2.5 rounded-lg font-mono text-sm"
-                style={{
-                  background: "#0D3320",
-                  border:     "1px solid #3FB950",
-                  color:      "#3FB950",
-                  boxShadow:  "0 4px 32px rgba(63,185,80,0.4)",
-                  animation:  "pulse 2s cubic-bezier(0.4,0,0.6,1) infinite",
-                }}
-              >
-                <ShieldCheck className="w-4 h-4 shrink-0" />
-                <span>Circuit is Safe to Build! · Health: <strong>100/100</strong></span>
-                {tr.length > 0 && (
-                  <span style={{ opacity: 0.9 }}>
-                    · Tests: <strong>{tp}/{tr.length}</strong> ✓
-                  </span>
-                )}
-              </div>
-            </div>
-          );
-        })()}
 
         {/* ── Main 3-panel body ── */}
         <div className="flex flex-1 min-h-0">
