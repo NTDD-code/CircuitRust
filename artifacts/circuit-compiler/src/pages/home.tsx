@@ -59,7 +59,7 @@ import { calculateHealthScore, playCompileSound } from "@/lib/health-score";
 import { HecateModal } from "@/components/hecate-modal";
 import type { SafetyIssue } from "@workspace/api-client-react";
 
-type LucideIcon = ForwardRefExoticComponent<Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>>;
+type LucideIcon = React.ElementType;
 type OutputTabDef = { id: OutputTab; icon: LucideIcon; label: string; disabled?: boolean };
 
 // ── Frontend RefDes helper (mirrors backend circuit-exporter logic) ─────────

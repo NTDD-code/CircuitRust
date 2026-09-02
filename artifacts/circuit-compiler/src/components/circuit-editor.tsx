@@ -11,6 +11,7 @@ const COMPONENT_TYPES = [
   "VoltageRegulator", "LDO", "BuckConverter", "BoostConverter",
   "DHT11", "DHT22", "MPU6050", "Ultrasonic", "IRSensor", "PhotoResistor", "Thermistor",
   "ArduinoUno", "ArduinoNano", "ESP32", "ESP8266", "RaspberryPiPico",
+  "Motor", "Relay", "Buzzer",
 ];
 
 const NET_TYPES = [
