@@ -1,0 +1,156 @@
+Model
+Category
+RPM
+TPM
+RPD
+Charts
+Antigravity
+Agents	
+0 / 60
+0 / 100K
+0 / 100
+Deep Research Pro Preview
+Agents	
+0 / 0
+0 / 0
+0 / 0
+Gemini 2 Flash
+Text-out models	
+0 / 0
+0 / 0
+0 / 0
+Gemini 2 Flash Lite
+Text-out models	
+0 / 0
+0 / 0
+0 / 0
+Computer Use Preview
+Other models	
+0 / 0
+0 / 0
+0 / 0
+Gemini 2.5 Flash
+Text-out models	
+0 / 5
+0 / 250K
+0 / 20
+Nano Banana (Gemini 2.5 Flash Preview Image)
+Multi-modal generative models	
+0 / 0
+0 / 0
+0 / 0
+Gemini 2.5 Flash Lite
+Text-out models	
+0 / 10
+0 / 250K
+0 / 20
+Gemini 2.5 Flash TTS
+Multi-modal generative models	
+0 / 3
+0 / 10K
+0 / 10
+Gemini 2.5 Pro
+Text-out models	
+0 / 0
+0 / 0
+0 / 0
+Gemini 2.5 Pro TTS
+Multi-modal generative models	
+0 / 0
+0 / 0
+0 / 0
+Gemini 3 Flash
+Text-out models	
+0 / 5
+0 / 250K
+0 / 20
+Nano Banana Pro (Gemini 3 Pro Image)
+Multi-modal generative models	
+0 / 0
+0 / 0
+0 / 0
+Gemini 3.1 Pro
+Text-out models	
+0 / 0
+0 / 0
+0 / 0
+Nano Banana 2 (Gemini 3.1 Flash Image)
+Multi-modal generative models	
+0 / 0
+0 / 0
+0 / 0
+Gemini 3.1 Flash Lite
+Text-out models	
+0 / 15
+0 / 250K
+0 / 500
+Nano Banana 2 Lite (Gemini 3.1 Flash Lite Image)
+Multi-modal generative models	
+0 / 0
+0 / 0
+0 / 0
+Gemini 3.1 Flash TTS
+Multi-modal generative models	
+0 / 3
+0 / 10K
+0 / 10
+Gemini 3.5 Flash
+Text-out models	
+0 / 5
+0 / 250K
+0 / 20
+Gemini 3.5 Flash Lite
+Text-out models	
+0 / 15
+0 / 250K
+0 / 500
+Gemini 3.6 Flash
+Text-out models	
+0 / 5
+0 / 250K
+0 / 20
+Gemini 3.7 Flash
+Text-out models	
+0 / 5
+0 / 250K
+0 / 20
+Gemini Embedding 1
+Other models	
+0 / 100
+0 / 30K
+0 / 1K
+Gemini Embedding 2
+Other models	
+0 / 100
+0 / 30K
+0 / 1K
+Gemini Omni Flash
+Multi-modal generative models	
+0 / 0
+0 / 0
+0 / 0
+Gemini Robotics ER 1.6 Preview
+Other models	
+0 / 5
+0 / 250K
+0 / 20
+Gemini Robotics ER 2 Preview
+Other models	
+0 / 5
+0 / 250K
+0 / 20
+Gemma 4 26B
+Other models	
+0 / 30
+0 / 16K
+0 / 14.4K
+Gemma 4 31B
+Other models	
+0 / 30
+0 / 16K
+0 / 14.4K
+Lyria 3 Clip
+Multi-modal generative models	
+0 / 0
+0 / 0
+0 / 0
