@@ -72,6 +72,9 @@ const COMPONENT_SPECS: Record<string, CompSpec> = {
   IRSensor:        { desc: "IR Proximity / Line Sensor",         specs: [{ label:"Vcc",       value:"3.3–5V"      }], maxVcc:5.5 },
   PhotoResistor:   { desc: "LDR Light-Dependent Resistor",       specs: [{ label:"Dark R",    value:"1MΩ"         }] },
   Thermistor:      { desc: "NTC 10kΩ Thermistor",               specs: [{ label:"R@25°C",    value:"10kΩ"        }] },
+  Motor:           { desc: "DC Motor",                           specs: [{ label:"Type",      value:"DC"          }, { label:"Flyback", value:"Required" }] },
+  Relay:           { desc: "Electromechanical Relay",            specs: [{ label:"Coil",      value:"5V/12V"      }, { label:"Flyback", value:"Required" }] },
+  Buzzer:          { desc: "Piezo/Magnetic Buzzer",              specs: [{ label:"Type",      value:"Active/Passive"}] },
 };
 
 // ── Domain types ─────────────────────────────────────────────────────────────

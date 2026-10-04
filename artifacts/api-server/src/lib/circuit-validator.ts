@@ -383,6 +383,7 @@ export function validateCircuit(
       if (!srcNet || srcNet.type !== "power") continue;
 
       // Check for a series resistor: any Resistor that sits between VCC and the LED anode
+      let seriesResistorValue = -1;
       const hasSeriesResistor = [...components.entries()].some(([rId, rComp]) => {
         if (rComp.type !== "Resistor") return false;
         const rTouchesPower = connections.some(
@@ -391,13 +392,31 @@ export function validateCircuit(
         const rTouchesLed = connections.some(
           (c) => (c.from === rId || c.to === rId) && (c.from === ledId || c.to === ledId),
         );
-        return rTouchesPower && rTouchesLed;
+
+        if (rTouchesPower && rTouchesLed) {
+          if (rComp.properties["resistance"]) {
+            // Parse resistance like "220", "220R", "1k", etc.
+            const rawRes = rComp.properties["resistance"].toLowerCase();
+            const numPart = parseFloat(rawRes);
+            if (!isNaN(numPart)) {
+              if (rawRes.includes("k")) seriesResistorValue = numPart * 1000;
+              else if (rawRes.includes("m")) seriesResistorValue = numPart * 1000000;
+              else seriesResistorValue = numPart;
+            }
+          }
+          return true;
+        }
+        return false;
       });
 
       if (!hasSeriesResistor) {
         errors.push({ line: ledComp.line, column: 1,
           message: `E007: LED '${ledId}' is connected directly to power net '${srcId}' without a current-limiting resistor. Add a series resistor (e.g., 220Ω for 5V supply).`,
           errorCode: "E007", severity: "error", sourceLine: "" });
+      } else if (srcNet.voltage !== undefined && srcNet.voltage > 3.3 && seriesResistorValue !== -1 && seriesResistorValue < 100) {
+        errors.push({ line: ledComp.line, column: 1,
+          message: `E015: LED '${ledId}' series resistor is too low (${seriesResistorValue}Ω) for a ${srcNet.voltage}V supply. This will exceed the maximum forward current and destroy the LED. Increase resistance (e.g., 220Ω - 1kΩ).`,
+          errorCode: "E015", severity: "error", sourceLine: "" });
       }
     }
   }
